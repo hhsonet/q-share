@@ -157,3 +157,35 @@ export const register = (email: string, password: string) =>
 export const login = (identifier: string, password: string) =>
   request<{ user: User }>('/api/auth/login', json({ identifier, password })).then((r) => r.user)
 export const logout = () => request<void>('/api/auth/logout', { method: 'POST' })
+
+// --- admin ---
+export interface AdminStats {
+  users: number
+  admins: number
+  files: number
+  bytes: number
+  publicFiles: number
+  anonymousFiles: number
+}
+
+export interface AdminUser {
+  id: number
+  email: string | null
+  username: string | null
+  name: string
+  isAdmin: boolean
+  createdAt: string
+  fileCount: number
+  bytes: number
+  lastUpload: string | null
+}
+
+export interface AdminFile extends FileDto {
+  uploader: { id: number; name: string } | null
+}
+
+export const adminStats = () => request<AdminStats>('/api/admin/stats')
+export const adminUsers = (q: string) =>
+  request<{ users: AdminUser[] }>(`/api/admin/users?${new URLSearchParams({ q })}`).then((r) => r.users)
+export const adminFiles = (q: string, sort: SortKey, filter: string) =>
+  request<{ files: AdminFile[] }>(`/api/admin/files?${new URLSearchParams({ q, sort, filter })}`).then((r) => r.files)

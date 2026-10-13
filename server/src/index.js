@@ -10,6 +10,7 @@ import { pool } from './lib/db.js';
 import { ensureStorage } from './lib/files.js';
 import { identityMiddleware } from './middleware/identity.js';
 import { ownerMiddleware } from './middleware/owner.js';
+import { adminRouter } from './routes/admin.js';
 import { authRouter } from './routes/auth.js';
 import { filesRouter } from './routes/files.js';
 
@@ -61,6 +62,7 @@ app.get('/api/config', (_req, res) =>
     publicUrl: config.publicUrl || null,
   }),
 );
+app.use('/api/admin', adminRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/files', filesRouter);
 app.use('/api', (_req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Not found.' } }));
