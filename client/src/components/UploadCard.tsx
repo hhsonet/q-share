@@ -33,7 +33,7 @@ function expiryLabel(hours: number): string {
 }
 
 export function UploadCard({ config, user, onUploaded, onSignIn }: Props) {
-  const [makePublic, setMakePublic] = useState(false)
+  const [makePublic, setMakePublic] = useState(true)
   const [queue, setQueue] = useState<QueueItem[]>([])
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)

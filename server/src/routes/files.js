@@ -84,8 +84,8 @@ filesRouter.post('/', (req, res, next) => {
       const files = req.files || [];
       if (!files.length) throw new HttpError(400, 'No file received.', 'NO_FILE');
 
-      // Anonymous uploads are always public; signed-in users choose (default private).
-      const isPublic = req.user ? req.body?.public === '1' : true;
+      // Anonymous uploads are always public; signed-in users choose (default public).
+      const isPublic = req.user ? req.body?.public !== '0' : true;
       const userId = req.user ? req.user.id : null;
       const viewer = { ownerHash: req.ownerHash, user: req.user };
 
