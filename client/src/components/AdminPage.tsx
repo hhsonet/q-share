@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CalendarClock, KeyRound, Search } from 'lucide-react'
 import {
-  adminFiles, adminStats, adminUsers,
+  adminFiles, adminSetVisibility, adminStats, adminUsers,
   type AdminFile, type AdminStats, type AdminUser, type SortKey,
 } from '@/api/files'
 import { ExpirySettings } from '@/components/ExpirySettings'
@@ -11,6 +11,8 @@ import { FileActions } from '@/components/FileActions'
 import { ResetPasswordDialog } from '@/components/ResetPasswordDialog'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
+import { toast } from 'sonner'
 import { cn, formatBytes, formatDateTime } from '@/lib/utils'
 
 type Tab = 'users' | 'files'
@@ -113,6 +115,18 @@ export function AdminPage({ publicUrl, currentUserId, onSelfReset }: { publicUrl
   }, [tab, q, sort, filter, tick])
 
   const refresh = useCallback(() => setTick((n) => n + 1), [])
+
+  const setVisibility = async (f: AdminFile, isPublic: boolean) => {
+    setFiles((list) => list.map((x) => (x.id === f.id ? { ...x, isPublic } : x))) // optimistic
+    try {
+      await adminSetVisibility(f.id, isPublic)
+      toast.success(isPublic ? `${f.name} is now public` : `${f.name} is now private`)
+      refresh()
+    } catch (e) {
+      setFiles((list) => list.map((x) => (x.id === f.id ? { ...x, isPublic: f.isPublic } : x)))
+      toast.error('Could not change visibility', { description: e instanceof Error ? e.message : undefined })
+    }
+  }
 
   const viewUserFiles = (u: AdminUser) => {
     setFilter(`user:${u.id}`)
@@ -279,14 +293,15 @@ export function AdminPage({ publicUrl, currentUserId, onSelfReset }: { publicUrl
                     </td>
                     <td className="px-3 py-3 font-mono text-xs text-mute-2">{formatBytes(f.size)}</td>
                     <td className="px-3 py-3">
-                      <span
-                        className={cn(
-                          'rounded-full px-2 py-0.5 text-[11px] font-medium',
-                          f.isPublic ? 'bg-blue-tint text-blue-ink' : 'bg-fill-2 text-mute-2',
-                        )}
-                      >
-                        {f.isPublic ? 'Public' : 'Private'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={f.isPublic}
+                          onCheckedChange={(v) => setVisibility(f, v)}
+                          aria-label={`Make ${f.name} public`}
+                          className="h-5 w-9 [&>span]:size-4 [&>span]:data-[state=checked]:translate-x-4"
+                        />
+                        <span className={cn('text-[13px] font-medium', f.isPublic ? 'text-blue-ink' : 'text-mute')}>{f.isPublic ? 'Public' : 'Private'}</span>
+                      </div>
                     </td>
                     <td className="px-3 py-3 font-mono text-xs text-mute-2">{formatDateTime(f.createdAt)}</td>
                     <td className="px-3 py-3 font-mono text-xs text-mute-2">{f.expiresAt ? formatDateTime(f.expiresAt) : 'Never'}</td>

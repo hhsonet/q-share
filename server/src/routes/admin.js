@@ -200,3 +200,17 @@ adminRouter.patch('/files/:id/expiry', async (req, res, next) => {
     next(e);
   }
 });
+
+// Make any file public (listed for everyone) or private (link only).
+adminRouter.patch('/files/:id/visibility', async (req, res, next) => {
+  try {
+    if (!PUBLIC_ID_RE.test(req.params.id)) throw new HttpError(404, 'File not found.', 'NOT_FOUND');
+    const r = z.object({ isPublic: z.boolean() }).safeParse(req.body);
+    if (!r.success) throw new HttpError(400, 'Invalid request.', 'BAD_REQUEST');
+    const [result] = await pool.query('UPDATE files SET is_public = ? WHERE public_id = ?', [r.data.isPublic ? 1 : 0, req.params.id]);
+    if (!result.affectedRows) throw new HttpError(404, 'File not found.', 'NOT_FOUND');
+    res.json({ isPublic: r.data.isPublic });
+  } catch (e) {
+    next(e);
+  }
+});

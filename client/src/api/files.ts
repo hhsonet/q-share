@@ -201,3 +201,5 @@ export const adminApplyExpiryToAll = (days: number) =>
   request<{ updated: number }>('/api/admin/files/apply-expiry', json({ days }))
 export const adminSetFileExpiry = (id: string, days: number | null) =>
   request<{ expiresAt: string | null }>(`/api/admin/files/${encodeURIComponent(id)}/expiry`, { ...json({ days }), method: 'PATCH' })
+export const adminSetVisibility = (id: string, isPublic: boolean) =>
+  request<{ isPublic: boolean }>(`/api/admin/files/${encodeURIComponent(id)}/visibility`, { ...json({ isPublic }), method: 'PATCH' })
