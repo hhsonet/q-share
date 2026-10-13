@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { hashPassword } from '../lib/auth.js';
 import { pool } from '../lib/db.js';
 import { HttpError } from '../lib/errors.js';
 import { getExtension } from '../lib/files.js';
@@ -120,6 +121,26 @@ adminRouter.get('/files', async (req, res, next) => {
         uploader: r.user_id ? { id: Number(r.user_id), name: r.username || r.email } : null,
       })),
     });
+  } catch (e) {
+    next(e);
+  }
+});
+
+const resetBody = z.object({ password: z.string().min(8, 'Password must be at least 8 characters.').max(200) });
+
+// Set a new password for a user and sign them out everywhere.
+adminRouter.post('/users/:id/reset-password', async (req, res, next) => {
+  try {
+    if (!/^\d{1,12}$/.test(req.params.id)) throw new HttpError(404, 'User not found.', 'NOT_FOUND');
+    const parsed = resetBody.safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, parsed.error.issues[0].message, 'BAD_REQUEST');
+    const id = Number(req.params.id);
+    const [rows] = await pool.query('SELECT id FROM users WHERE id = ? LIMIT 1', [id]);
+    if (!rows[0]) throw new HttpError(404, 'User not found.', 'NOT_FOUND');
+    const hash = await hashPassword(parsed.data.password);
+    await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [hash, id]);
+    await pool.query('DELETE FROM sessions WHERE user_id = ?', [id]);
+    res.status(204).end();
   } catch (e) {
     next(e);
   }

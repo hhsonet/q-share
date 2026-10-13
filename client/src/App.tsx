@@ -109,7 +109,11 @@ export default function App() {
 
       <main className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-9 px-[clamp(20px,4vw,48px)] py-[clamp(28px,5vw,56px)]">
         {showAdmin ? (
-          <AdminPage publicUrl={publicUrl} />
+          <AdminPage
+            publicUrl={publicUrl}
+            currentUserId={user!.id}
+            onSelfReset={() => { setUser(null); window.location.hash = ''; toast('Password changed. Please sign in again.') }}
+          />
         ) : wantsAdmin && !authReady ? null : wantsAdmin ? (
           <div className="flex max-w-[480px] flex-col gap-3 rounded-2xl border border-line bg-white p-6">
             <h1 className="text-xl font-semibold tracking-[-0.02em]">Admin area</h1>

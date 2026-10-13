@@ -189,3 +189,5 @@ export const adminUsers = (q: string) =>
   request<{ users: AdminUser[] }>(`/api/admin/users?${new URLSearchParams({ q })}`).then((r) => r.users)
 export const adminFiles = (q: string, sort: SortKey, filter: string) =>
   request<{ files: AdminFile[] }>(`/api/admin/files?${new URLSearchParams({ q, sort, filter })}`).then((r) => r.files)
+export const adminResetPassword = (id: number, password: string) =>
+  request<void>(`/api/admin/users/${id}/reset-password`, json({ password }))

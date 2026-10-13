@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Search } from 'lucide-react'
+import { KeyRound, Search } from 'lucide-react'
 import {
   adminFiles, adminStats, adminUsers,
   type AdminFile, type AdminStats, type AdminUser, type SortKey,
 } from '@/api/files'
 import { ExtTile } from '@/components/ExtTile'
 import { FileActions } from '@/components/FileActions'
+import { ResetPasswordDialog } from '@/components/ResetPasswordDialog'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn, formatBytes, formatDateTime } from '@/lib/utils'
 
@@ -69,7 +71,8 @@ const Rows = () => (
   </div>
 )
 
-export function AdminPage({ publicUrl }: { publicUrl: string | null }) {
+export function AdminPage({ publicUrl, currentUserId, onSelfReset }: { publicUrl: string | null; currentUserId: number; onSelfReset: () => void }) {
+  const [resetUser, setResetUser] = useState<AdminUser | null>(null)
   const [tab, setTab] = useState<Tab>('files')
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -182,7 +185,7 @@ export function AdminPage({ publicUrl }: { publicUrl: string | null }) {
           ) : error ? (
             <p className="m-5 rounded-xl border border-danger/30 bg-danger-wash p-4 text-sm text-danger" role="alert">{error}</p>
           ) : tab === 'users' ? (
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full min-w-[820px] text-left text-sm">
               <thead className="bg-paper font-mono text-[11.5px] uppercase tracking-wide text-mute">
                 <tr>
                   <th className="px-5 py-2.5 font-medium">User</th>
@@ -190,7 +193,8 @@ export function AdminPage({ publicUrl }: { publicUrl: string | null }) {
                   <th className="px-3 py-2.5 font-medium">Files</th>
                   <th className="px-3 py-2.5 font-medium">Storage</th>
                   <th className="px-3 py-2.5 font-medium">Joined</th>
-                  <th className="px-5 py-2.5 font-medium">Last upload</th>
+                  <th className="px-3 py-2.5 font-medium">Last upload</th>
+                  <th className="px-5 py-2.5 text-right font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -220,12 +224,20 @@ export function AdminPage({ publicUrl }: { publicUrl: string | null }) {
                     </td>
                     <td className="px-3 py-3 font-mono text-xs text-mute-2">{formatBytes(u.bytes)}</td>
                     <td className="px-3 py-3 font-mono text-xs text-mute-2">{formatDateTime(u.createdAt)}</td>
-                    <td className="px-5 py-3 font-mono text-xs text-mute-2">{u.lastUpload ? formatDateTime(u.lastUpload) : '—'}</td>
+                    <td className="px-3 py-3 font-mono text-xs text-mute-2">{u.lastUpload ? formatDateTime(u.lastUpload) : '—'}</td>
+                    <td className="px-5 py-3">
+                      <div className="flex justify-end">
+                        <Button variant="outline" size="sm" onClick={() => setResetUser(u)} aria-label={`Reset password for ${u.name}`}>
+                          <KeyRound className="size-3.5" />
+                          Reset password
+                        </Button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
                 {!users.length && (
                   <tr>
-                    <td colSpan={6} className="px-5 py-12 text-center text-mute">No users found.</td>
+                    <td colSpan={7} className="px-5 py-12 text-center text-mute">No users found.</td>
                   </tr>
                 )}
               </tbody>
@@ -289,6 +301,16 @@ export function AdminPage({ publicUrl }: { publicUrl: string | null }) {
           )}
         </div>
       </section>
+
+      <ResetPasswordDialog
+        user={resetUser}
+        isSelf={resetUser?.id === currentUserId}
+        onClose={(changed) => {
+          const self = changed && resetUser?.id === currentUserId
+          setResetUser(null)
+          if (self) onSelfReset()
+        }}
+      />
     </div>
   )
 }
