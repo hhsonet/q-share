@@ -107,6 +107,7 @@ export function isOwnerOf(row, viewer) {
 
 export function toDto(row, viewer) {
   return {
+    kind: 'file',
     id: row.public_id,
     name: row.original_name,
     extension: getExtension(row.original_name),

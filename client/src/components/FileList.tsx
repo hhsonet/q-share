@@ -1,12 +1,14 @@
 import { Search } from 'lucide-react'
-import type { FileDto, Scope, SortKey } from '@/api/files'
+import { Files } from 'lucide-react'
+import { bundlePath, type ListItem, type Scope, type SortKey } from '@/api/files'
+import { BundleActions } from '@/components/BundleActions'
 import { ExtTile } from '@/components/ExtTile'
 import { FileActions } from '@/components/FileActions'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn, formatBytes } from '@/lib/utils'
 
 interface Props {
-  files: FileDto[]
+  files: ListItem[]
   loading: boolean
   error: string | null
   query: string
@@ -123,8 +125,24 @@ export function FileList({ files, loading, error, query, sort, scope, isAdmin, p
           <ul className="max-h-[75vh] overflow-y-auto">
             {files.map((f) => {
               const left = expiryText(f.expiresAt)
+              if (f.kind === 'bundle') {
+                return (
+                  <li key={`b-${f.id}`} className="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3.5 border-b border-line-soft px-5 py-3 last:border-b-0 hover:bg-paper">
+                    <div className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-ink text-white" aria-hidden="true">
+                      <Files className="size-[18px]" />
+                    </div>
+                    <div className="flex min-w-0 flex-col gap-[3px]">
+                      <a href={bundlePath(f.id)} className="truncate text-sm font-medium !text-ink hover:underline" title={f.name}>{f.name}</a>
+                      <div className="font-mono text-[11.5px] text-mute">
+                        Bundle · {f.fileCount} file{f.fileCount === 1 ? '' : 's'} · {formatBytes(f.size)} · {shortDate(f.createdAt)}{left && ` · ${left}`} · {f.isPublic ? 'Public' : 'Private'}
+                      </div>
+                    </div>
+                    <BundleActions bundle={f} publicUrl={publicUrl} onDeleted={onDeleted} />
+                  </li>
+                )
+              }
               return (
-                <li key={f.id} className="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3.5 border-b border-line-soft px-5 py-3 last:border-b-0 hover:bg-paper">
+                <li key={`f-${f.id}`} className="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3.5 border-b border-line-soft px-5 py-3 last:border-b-0 hover:bg-paper">
                   <ExtTile extension={f.extension} />
                   <div className="flex min-w-0 flex-col gap-[3px]">
                     <div className="truncate text-sm font-medium" title={f.name}>{f.name}</div>

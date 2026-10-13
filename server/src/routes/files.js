@@ -5,15 +5,16 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { pool } from '../lib/db.js';
 import { getExpiryHours } from '../lib/settings.js';
+import { bundleDto, findBundle } from './bundles.js';
 import { HttpError } from '../lib/errors.js';
 import {
   PUBLIC_ID_RE,
   checkContent,
   checkExtension,
   mimeFor,
+  isOwnerOf,
   moveIntoStorage,
   newPublicId,
-  isOwnerOf,
   newStoredName,
   removeStored,
   sanitizeOriginalName,
@@ -29,7 +30,7 @@ const upload = multer({
     destination: (_req, _file, cb) => cb(null, tmpDir()),
     filename: (_req, _file, cb) => cb(null, newStoredName()),
   }),
-  limits: { fileSize: config.maxFileSize, files: config.maxFilesPerRequest, fields: 2 },
+  limits: { fileSize: config.maxFileSize, files: config.maxFilesPerRequest, fields: 3 },
   fileFilter: (_req, file, cb) => {
     const problem = checkExtension(sanitizeOriginalName(file.originalname));
     cb(problem ? new HttpError(415, problem, 'TYPE_NOT_ALLOWED') : null, !problem);
@@ -84,10 +85,18 @@ filesRouter.post('/', (req, res, next) => {
       const files = req.files || [];
       if (!files.length) throw new HttpError(400, 'No file received.', 'NO_FILE');
 
-      // Anonymous uploads are always public; signed-in users choose (default public).
-      const isPublic = req.user ? req.body?.public !== '0' : true;
-      const userId = req.user ? req.user.id : null;
       const viewer = { ownerHash: req.ownerHash, user: req.user };
+
+      // Anonymous uploads are always public; signed-in users choose (default public).
+      let isPublic = req.user ? req.body?.public !== '0' : true;
+      let userId = req.user ? req.user.id : null;
+      let bundle = null;
+      if (req.body?.bundle) {
+        bundle = await findBundle(String(req.body.bundle));
+        if (!isOwnerOf(bundle, viewer)) throw new HttpError(403, 'You are not allowed to add files to this bundle.', 'FORBIDDEN');
+        isPublic = !!bundle.is_public; // files follow their bundle
+        userId = bundle.user_id == null ? null : Number(bundle.user_id);
+      }
 
       const expiryHours = await getExpiryHours();
       const created = [];
@@ -102,14 +111,14 @@ filesRouter.post('/', (req, res, next) => {
           const storedName = newStoredName();
           const publicId = newPublicId();
           const now = new Date();
-          const expires = expiryHours ? new Date(now.getTime() + expiryHours * 3600_000) : null;
+          const expires = bundle ? bundle.expires_at : expiryHours ? new Date(now.getTime() + expiryHours * 3600_000) : null;
 
           await moveIntoStorage(f.path, storedName);
           placed.push(storedName);
           await pool.query(
-            `INSERT INTO files (public_id, original_name, stored_name, mime_type, size, owner_hash, is_public, user_id, created_at, expires_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [publicId, name, storedName, mimeFor(name), f.size, req.ownerHash, isPublic ? 1 : 0, userId, now, expires],
+            `INSERT INTO files (public_id, original_name, stored_name, mime_type, size, owner_hash, is_public, user_id, bundle_id, created_at, expires_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [publicId, name, storedName, mimeFor(name), f.size, req.ownerHash, isPublic ? 1 : 0, userId, bundle ? bundle.id : null, now, expires],
           );
           created.push({
             public_id: publicId, original_name: name, mime_type: mimeFor(name), size: f.size,
@@ -157,13 +166,37 @@ filesRouter.get('/', async (req, res, next) => {
     const like = `%${q.replace(/[\\%_]/g, '\\$&')}%`;
     const [rows] = await pool.query(
       `SELECT * FROM files
-       WHERE ${where} AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
+       WHERE ${where} AND bundle_id IS NULL AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
          AND original_name LIKE ? ESCAPE '\\\\'
        ORDER BY ${SORT_SQL[sort]} LIMIT 500`,
       [...params, like],
     );
+    const [bundleRows] = await pool.query(
+      `SELECT * FROM (
+         SELECT b.*,
+           (SELECT COUNT(*) FROM files f WHERE f.bundle_id = b.id AND (f.expires_at IS NULL OR f.expires_at > UTC_TIMESTAMP())) AS file_count,
+           (SELECT COALESCE(SUM(f.size), 0) FROM files f WHERE f.bundle_id = b.id AND (f.expires_at IS NULL OR f.expires_at > UTC_TIMESTAMP())) AS total_size
+         FROM bundles b
+       ) t
+       WHERE ${where} AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP()) AND file_count > 0
+         AND (COALESCE(name, '') LIKE ? ESCAPE '\\\\'
+              OR EXISTS (SELECT 1 FROM files f WHERE f.bundle_id = t.id AND f.original_name LIKE ? ESCAPE '\\\\'))
+       LIMIT 500`,
+      [...params, like, like],
+    );
     const viewer = { ownerHash: req.ownerHash, user: req.user };
-    res.json({ files: rows.map((r) => toDto(r, viewer)) });
+    const items = [
+      ...rows.map((r) => toDto(r, viewer)),
+      ...bundleRows.map((r) => bundleDto(r, viewer, Number(r.file_count), Number(r.total_size))),
+    ];
+    const byDate = (a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0);
+    items.sort({
+      newest: (a, b) => byDate(b, a),
+      oldest: byDate,
+      name: (a, b) => a.name.localeCompare(b.name),
+      size: (a, b) => b.size - a.size,
+    }[sort]);
+    res.json({ files: items.slice(0, 500) });
   } catch (e) {
     next(e);
   }

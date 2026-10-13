@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { listFiles, type FileDto, type Scope, type SortKey } from '@/api/files'
+import { listFiles, type ListItem, type Scope, type SortKey } from '@/api/files'
 
 export function useFiles(scope: Scope, userId: number | null) {
-  const [files, setFiles] = useState<FileDto[]>([])
+  const [files, setFiles] = useState<ListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')

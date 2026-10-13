@@ -109,6 +109,7 @@ adminRouter.get('/files', async (req, res, next) => {
     );
     res.json({
       files: rows.map((r) => ({
+        kind: 'file',
         id: r.public_id,
         name: r.original_name,
         extension: getExtension(r.original_name),

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, User as UserIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { getConfig, getMe, logout, type AppConfig, type FileDto, type Scope, type User } from '@/api/files'
+import { bundleShareUrl, getConfig, getMe, logout, type AppConfig, type BundleDto, type FileDto, type Scope, type User } from '@/api/files'
 import { AdminPage } from '@/components/AdminPage'
 import { AuthDialog } from '@/components/AuthDialog'
+import { BundlePage } from '@/components/BundlePage'
 import { FileList } from '@/components/FileList'
 import { ProfileDialog } from '@/components/ProfileDialog'
 import { UploadCard } from '@/components/UploadCard'
@@ -11,6 +12,7 @@ import { UserMenu } from '@/components/UserMenu'
 import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/sonner'
 import { useFiles } from '@/hooks/useFiles'
+import { copyText } from '@/lib/clipboard'
 import { formatBytes } from '@/lib/utils'
 
 export default function App() {
@@ -37,8 +39,19 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
-  const handleUploaded = (files: FileDto[]) => {
-    toast.success(files.length === 1 ? `Uploaded ${files[0].name}` : `${files.length} files uploaded`)
+  const handleUploaded = (files: FileDto[], bundle?: BundleDto) => {
+    if (bundle) {
+      toast.success(`Bundle created · ${files.length} file${files.length === 1 ? '' : 's'}`, {
+        action: {
+          label: 'Copy link',
+          onClick: async () => {
+            if (await copyText(bundleShareUrl(bundle.id, config?.publicUrl))) toast.success('Bundle link copied to clipboard')
+          },
+        },
+      })
+    } else {
+      toast.success(files.length === 1 ? `Uploaded ${files[0].name}` : `${files.length} files uploaded`)
+    }
     list.reload()
   }
 
@@ -54,7 +67,8 @@ export default function App() {
   }
 
   const publicUrl = config?.publicUrl ?? null
-  const wantsAdmin = hash === '#admin'
+  const bundleId = window.location.pathname.match(/^\/b\/([A-Za-z0-9_-]{24})\/?$/)?.[1] ?? null
+  const wantsAdmin = !bundleId && hash === '#admin'
   const showAdmin = wantsAdmin && !!user?.isAdmin
   const total = list.files.reduce((n, f) => n + f.size, 0)
   const count = `${list.files.length} ${scope === 'public' ? 'public ' : ''}${list.files.length === 1 ? 'file' : 'files'}`
@@ -63,7 +77,7 @@ export default function App() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="flex items-center justify-between gap-4 border-b border-line bg-bar px-[clamp(20px,4vw,48px)] py-[18px]">
-        <a href="#" className="flex items-center gap-2.5 !text-ink hover:!text-ink" aria-label="QuickShare home">
+        <a href="/" className="flex items-center gap-2.5 !text-ink hover:!text-ink" aria-label="QuickShare home">
           <div className="grid size-7 place-items-center rounded-lg bg-ink" aria-hidden="true">
             <div className="size-2.5 rounded-full bg-[oklch(0.68_0.19_262)]" />
           </div>
@@ -107,7 +121,9 @@ export default function App() {
       </header>
 
       <main className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-9 px-[clamp(20px,4vw,48px)] py-[clamp(28px,5vw,56px)]">
-        {showAdmin ? (
+        {bundleId ? (
+          <BundlePage id={bundleId} publicUrl={publicUrl} />
+        ) : showAdmin ? (
           <AdminPage
             publicUrl={publicUrl}
             currentUserId={user!.id}

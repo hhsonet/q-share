@@ -21,3 +21,13 @@ export async function cleanupExpired() {
 export async function cleanupSessions() {
   await pool.query('DELETE FROM sessions WHERE expires_at <= UTC_TIMESTAMP()');
 }
+
+// Drop expired bundles and empty bundles left behind by failed uploads (older than 1 hour).
+export async function cleanupBundles() {
+  await pool.query(
+    `DELETE b FROM bundles b
+     WHERE (b.expires_at IS NOT NULL AND b.expires_at <= UTC_TIMESTAMP())
+        OR (b.created_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR)
+            AND NOT EXISTS (SELECT 1 FROM files f WHERE f.bundle_id = b.id))`,
+  );
+}

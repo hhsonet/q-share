@@ -5,7 +5,7 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import { config } from './config.js';
-import { cleanupExpired, cleanupSessions } from './lib/cleanup.js';
+import { cleanupBundles, cleanupExpired, cleanupSessions } from './lib/cleanup.js';
 import { pool } from './lib/db.js';
 import { ensureStorage } from './lib/files.js';
 import { getExpiryHours } from './lib/settings.js';
@@ -13,6 +13,7 @@ import { identityMiddleware } from './middleware/identity.js';
 import { ownerMiddleware } from './middleware/owner.js';
 import { adminRouter } from './routes/admin.js';
 import { authRouter } from './routes/auth.js';
+import { bundlesRouter } from './routes/bundles.js';
 import { filesRouter } from './routes/files.js';
 
 await ensureStorage();
@@ -70,6 +71,7 @@ app.get('/api/config', async (_req, res, next) => {
 app.use('/api/admin', adminRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/files', filesRouter);
+app.use('/api/bundles', bundlesRouter);
 app.use('/api', (_req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Not found.' } }));
 
 // Serve built frontend (production).
@@ -97,7 +99,7 @@ const server = app.listen(config.port, config.host, () => {
 });
 
 if (config.cleanupIntervalMinutes) {
-  const run = () => Promise.all([cleanupExpired(), cleanupSessions()]).catch((e) => console.error('cleanup error', e.code || e.message));
+  const run = () => Promise.all([cleanupExpired(), cleanupSessions()]).then(cleanupBundles).catch((e) => console.error('cleanup error', e.code || e.message));
   run();
   setInterval(run, config.cleanupIntervalMinutes * 60_000).unref();
 }

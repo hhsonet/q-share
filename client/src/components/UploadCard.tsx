@@ -1,10 +1,11 @@
 import { useCallback, useRef, useState } from 'react'
 import { AlertCircle, ArrowUp, CheckCircle2, Loader2, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { ApiError, uploadFile, type AppConfig, type FileDto, type User } from '@/api/files'
+import { ApiError, createBundle, deleteBundle, uploadFile, type AppConfig, type BundleDto, type FileDto, type User } from '@/api/files'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { cn, formatBytes, getExtension } from '@/lib/utils'
 
 type Status = 'ready' | 'uploading' | 'done' | 'error'
@@ -20,7 +21,7 @@ interface QueueItem {
 interface Props {
   config: AppConfig | null
   user: User | null
-  onUploaded: (files: FileDto[]) => void
+  onUploaded: (files: FileDto[], bundle?: BundleDto) => void
   onSignIn: () => void
 }
 
@@ -34,6 +35,10 @@ function expiryLabel(hours: number): string {
 
 export function UploadCard({ config, user, onUploaded, onSignIn }: Props) {
   const [makePublic, setMakePublic] = useState(true)
+  const [asBundle, setAsBundle] = useState(true)
+  const [bundleName, setBundleName] = useState('')
+  const bundleRef = useRef<BundleDto | null>(null)
+  const bundleFiles = useRef<FileDto[]>([])
   const [queue, setQueue] = useState<QueueItem[]>([])
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -85,14 +90,28 @@ export function UploadCard({ config, user, onUploaded, onSignIn }: Props) {
     const done: FileDto[] = []
     let failed = 0
 
+    // Several files can share one link: create the bundle first, then upload into it.
+    if (asBundle && queue.length >= 2 && !bundleRef.current) {
+      try {
+        bundleRef.current = await createBundle(bundleName.trim(), user ? makePublic : true)
+        bundleFiles.current = []
+      } catch (e) {
+        toast.error('Could not create the bundle', { description: e instanceof Error ? e.message : undefined })
+        setBusy(false)
+        return
+      }
+    }
+    const bundle = bundleRef.current
+
     for (const item of pending) {
       if (cancelAll.current) break
       const ctrl = new AbortController()
       controllers.current.set(item.key, ctrl)
       patch(item.key, { status: 'uploading', progress: 0, error: undefined })
       try {
-        const dto = await uploadFile(item.file, (progress) => patch(item.key, { progress }), ctrl.signal, user ? makePublic : true)
+        const dto = await uploadFile(item.file, (progress) => patch(item.key, { progress }), ctrl.signal, user ? makePublic : true, bundle?.id)
         done.push(dto)
+        if (bundle) bundleFiles.current.push(dto)
         patch(item.key, { status: 'done', progress: 100 })
       } catch (e) {
         const err = e instanceof ApiError ? e : new ApiError(0, 'ERROR', 'Upload failed.')
@@ -105,11 +124,33 @@ export function UploadCard({ config, user, onUploaded, onSignIn }: Props) {
     }
 
     setBusy(false)
-    setQueue((q) => q.filter((i) => i.status !== 'done')) // closes the modal; share popup takes over
-    if (done.length) {
-      onUploaded(done)
+    if (bundle) {
+      // Keep finished rows visible while some files still need a retry.
+      if (!failed && !cancelAll.current) {
+        onUploaded(bundleFiles.current, bundle)
+        bundleRef.current = null
+        bundleFiles.current = []
+        setBundleName('')
+        setQueue([])
+      }
+    } else {
+      setQueue((q) => q.filter((i) => i.status !== 'done'))
+      if (done.length) onUploaded(done)
     }
     if (failed) toast.error(`${failed} upload${failed > 1 ? 's' : ''} failed`, { description: 'See the errors in the list and retry.' })
+  }
+
+  // Closing mid-way: keep an already-filled bundle, drop an empty one.
+  const closeModal = () => {
+    const b = bundleRef.current
+    if (b) {
+      if (bundleFiles.current.length) onUploaded(bundleFiles.current, b)
+      else deleteBundle(b.id).catch(() => {})
+      bundleRef.current = null
+      bundleFiles.current = []
+    }
+    setBundleName('')
+    setQueue([])
   }
 
   const cancelUploads = () => {
@@ -177,7 +218,7 @@ export function UploadCard({ config, user, onUploaded, onSignIn }: Props) {
         />
       </div>
 
-      <Dialog open={queue.length > 0} onOpenChange={(o) => { if (!o && !busy) setQueue([]) }}>
+      <Dialog open={queue.length > 0} onOpenChange={(o) => { if (!o && !busy) closeModal() }}>
         <DialogContent onInteractOutside={(e) => busy && e.preventDefault()} onEscapeKeyDown={(e) => busy && e.preventDefault()}>
           <div className="border-b border-line-soft px-5 py-4 pr-14">
             <DialogTitle>Upload {queue.length === 1 ? 'file' : `${queue.length} files`}</DialogTitle>
@@ -204,6 +245,29 @@ export function UploadCard({ config, user, onUploaded, onSignIn }: Props) {
               </p>
             )}
           </div>
+          {queue.length >= 2 && (
+            <div className="space-y-2.5 border-b border-line-soft px-5 py-3.5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <label htmlFor="as-bundle" className="text-sm font-medium">Share as one bundle</label>
+                  <p className="text-xs text-mute">
+                    {asBundle ? 'One link for all files, with a download-all zip.' : 'Each file gets its own link.'}
+                  </p>
+                </div>
+                <Switch id="as-bundle" checked={asBundle} onCheckedChange={setAsBundle} disabled={busy || !!bundleRef.current} />
+              </div>
+              {asBundle && (
+                <Input
+                  aria-label="Bundle name (optional)"
+                  placeholder="Bundle name (optional)"
+                  maxLength={120}
+                  value={bundleName}
+                  onChange={(e) => setBundleName(e.target.value)}
+                  disabled={busy || !!bundleRef.current}
+                />
+              )}
+            </div>
+          )}
           <ul aria-label="Files selected for upload" className="overflow-y-auto">
             {queue.map((item) => (
               <li key={item.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 border-b border-line-soft px-4 py-3.5">

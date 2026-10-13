@@ -11,6 +11,7 @@ Simple file sharing: upload once, download anytime via an unguessable link or fi
 - Each upload gets a 144-bit random **file ID** (24 chars). The download link is `/api/files/<id>/download`; anyone with the link can download until it expires.
 - Files are stored on disk under random server-generated names; the original filename lives only in the DB.
 - **Visibility:** anonymous uploads are always **public** (listed in "Public files" for everyone). Signed-in users get a "Make public" switch per upload; the default is **private** (unlisted, reachable only by its link). Anyone with a file's link can still download it.
+- **Bundles:** when several files are uploaded together they can be shared as one bundle: one link (`/b/<id>`) that lists every file with a "Download all (zip)" button. Bundles follow the same visibility, ownership and expiry rules as single files; deleting a bundle deletes its files.
 - **Accounts:** optional email + password (scrypt-hashed, httpOnly session cookie, 30 days). Signed-in users manage their files from any browser.
 - **Anonymous ownership:** an anonymous browser keeps a random owner token in `localStorage` (only its SHA-256 is stored) so it can list and delete its own uploads. Clearing storage loses that ability; links keep working.
 - Expired files return `410` and are removed by a cleanup job.
@@ -24,6 +25,10 @@ Simple file sharing: upload once, download anytime via an unguessable link or fi
 | GET | `/api/files?scope=mine|public&q=&sort=newest|oldest|name|size` | List your files, or everyone's public files |
 | POST | `/api/auth/register`, `/login`, `/logout` | Accounts |
 | GET | `/api/auth/me` | Current user or `null` |
+| POST | `/api/bundles` | Create an empty bundle (`{ name?, isPublic? }`); upload into it with the `bundle` form field |
+| GET | `/api/bundles/:id` | Bundle and its files |
+| GET | `/api/bundles/:id/download` | Zip of all files |
+| DELETE | `/api/bundles/:id` | Delete bundle and its files (owner or admin) |
 | GET | `/api/files/:id` | File metadata |
 | GET | `/api/files/:id/download` | Download |
 | DELETE | `/api/files/:id` | Delete (owner only) |

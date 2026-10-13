@@ -1,4 +1,5 @@
 export interface FileDto {
+  kind: 'file'
   id: string
   name: string
   extension: string
@@ -10,6 +11,20 @@ export interface FileDto {
   isPublic: boolean
   isOwner: boolean
 }
+
+export interface BundleDto {
+  kind: 'bundle'
+  id: string
+  name: string
+  fileCount: number
+  size: number
+  createdAt: string
+  expiresAt: string | null
+  isPublic: boolean
+  isOwner: boolean
+}
+
+export type ListItem = FileDto | BundleDto
 
 export interface User {
   id: number
@@ -90,13 +105,17 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 export const getConfig = () => request<AppConfig>('/api/config')
 
 export const listFiles = (q: string, sort: SortKey, scope: Scope, signal?: AbortSignal) =>
-  request<{ files: FileDto[] }>(`/api/files?${new URLSearchParams({ q, sort, scope })}`, { signal }).then((r) => r.files)
+  request<{ files: ListItem[] }>(`/api/files?${new URLSearchParams({ q, sort, scope })}`, { signal }).then((r) => r.files)
 
 export const getFile = (id: string) => request<{ file: FileDto }>(`/api/files/${encodeURIComponent(id)}`).then((r) => r.file)
 
 export const deleteFile = (id: string) => request<void>(`/api/files/${encodeURIComponent(id)}`, { method: 'DELETE' })
 
 export const downloadPath = (id: string) => `/api/files/${encodeURIComponent(id)}/download`
+
+export const bundlePath = (id: string) => `/b/${encodeURIComponent(id)}`
+export const bundleDownloadPath = (id: string) => `/api/bundles/${encodeURIComponent(id)}/download`
+export const bundleShareUrl = (id: string, publicUrl?: string | null) => `${publicUrl || window.location.origin}${bundlePath(id)}`
 
 /** Absolute, shareable download URL. */
 export function shareUrl(id: string, publicUrl?: string | null): string {
@@ -109,11 +128,13 @@ export function uploadFile(
   onProgress: (pct: number) => void,
   signal: AbortSignal,
   isPublic = false,
+  bundleId?: string,
 ): Promise<FileDto> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     const form = new FormData()
     form.append('public', isPublic ? '1' : '0') // must precede the file part
+    if (bundleId) form.append('bundle', bundleId) // before the file part
     form.append('files', file, file.name)
 
     xhr.open('POST', '/api/files')
@@ -203,3 +224,10 @@ export const adminSetFileExpiry = (id: string, days: number | null) =>
   request<{ expiresAt: string | null }>(`/api/admin/files/${encodeURIComponent(id)}/expiry`, { ...json({ days }), method: 'PATCH' })
 export const adminSetVisibility = (id: string, isPublic: boolean) =>
   request<{ isPublic: boolean }>(`/api/admin/files/${encodeURIComponent(id)}/visibility`, { ...json({ isPublic }), method: 'PATCH' })
+
+// --- bundles ---
+export const createBundle = (name: string, isPublic: boolean) =>
+  request<{ bundle: BundleDto }>('/api/bundles', json({ name: name || undefined, isPublic })).then((r) => r.bundle)
+export const getBundle = (id: string) =>
+  request<{ bundle: BundleDto; files: FileDto[] }>(`/api/bundles/${encodeURIComponent(id)}`)
+export const deleteBundle = (id: string) => request<void>(`/api/bundles/${encodeURIComponent(id)}`, { method: 'DELETE' })
