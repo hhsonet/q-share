@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import {
   SESSION_COOKIE, SESSION_DAYS, clearSessionCookie, hashPassword, hashSession,
-  newSessionToken, parseCookies, setSessionCookie, verifyPassword,
+  newSessionToken, parseCookies, setSessionCookie, toUser, verifyPassword,
 } from '../lib/auth.js';
 import { pool } from '../lib/db.js';
 import { HttpError } from '../lib/errors.js';
@@ -20,6 +20,11 @@ authRouter.use(
     message: { error: { code: 'RATE_LIMITED', message: 'Too many attempts. Please try again later.' } },
   }),
 );
+
+const loginSchema = z.object({
+  identifier: z.string().trim().toLowerCase().min(1).max(254),
+  password: z.string().min(1).max(200),
+});
 
 const credentials = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
@@ -59,7 +64,7 @@ authRouter.post('/register', async (req, res, next) => {
       throw e;
     }
     await startSession(res, id);
-    res.status(201).json({ user: { id, email } });
+    res.status(201).json({ user: toUser({ id, email }) });
   } catch (e) {
     next(e);
   }
@@ -67,14 +72,20 @@ authRouter.post('/register', async (req, res, next) => {
 
 authRouter.post('/login', async (req, res, next) => {
   try {
-    const { email, password } = parseCredentials(req.body);
-    const [rows] = await pool.query('SELECT id, email, password_hash FROM users WHERE email = ? LIMIT 1', [email]);
+    // "identifier" is an email or a username; "email" is accepted for older clients.
+    const parsed = loginSchema.safeParse({ identifier: req.body?.identifier ?? req.body?.email, password: req.body?.password });
+    if (!parsed.success) throw new HttpError(400, 'Enter your email or username and password.', 'BAD_REQUEST');
+    const { identifier, password } = parsed.data;
+    const [rows] = await pool.query(
+      'SELECT id, email, username, is_admin, password_hash FROM users WHERE email = ? OR username = ? LIMIT 1',
+      [identifier, identifier],
+    );
     const u = rows[0];
-    // Same error and similar work for unknown email vs wrong password.
+    // Same error and similar work for unknown user vs wrong password.
     const ok = u ? await verifyPassword(password, u.password_hash) : (await hashPassword(password), false);
-    if (!ok) throw new HttpError(401, 'Incorrect email or password.', 'BAD_CREDENTIALS');
+    if (!ok) throw new HttpError(401, 'Incorrect email/username or password.', 'BAD_CREDENTIALS');
     await startSession(res, Number(u.id));
-    res.json({ user: { id: Number(u.id), email: u.email } });
+    res.json({ user: toUser(u) });
   } catch (e) {
     next(e);
   }

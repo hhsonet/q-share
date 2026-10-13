@@ -49,3 +49,14 @@ export function setSessionCookie(res, token) {
 export function clearSessionCookie(res) {
   res.clearCookie(SESSION_COOKIE, { httpOnly: true, sameSite: 'lax', secure: secure(), path: '/' });
 }
+
+/** Shape sent to the client and attached to req.user. */
+export function toUser(row) {
+  return {
+    id: Number(row.id),
+    email: row.email ?? null,
+    username: row.username ?? null,
+    name: row.username || row.email,
+    isAdmin: !!row.is_admin,
+  };
+}

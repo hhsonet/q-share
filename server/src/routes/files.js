@@ -40,7 +40,7 @@ const discard = (files) => Promise.all((files || []).map((f) => fs.unlink(f.path
 const listQuery = z.object({
   q: z.string().trim().max(100).optional().default(''),
   sort: z.enum(['newest', 'oldest', 'name', 'size']).optional().default('newest'),
-  scope: z.enum(['mine', 'public']).optional().default('mine'),
+  scope: z.enum(['mine', 'public', 'all']).optional().default('mine'),
 });
 
 const SORT_SQL = {
@@ -136,7 +136,11 @@ filesRouter.get('/', async (req, res, next) => {
     const { q, sort, scope } = listQuery.parse(req.query);
     let where;
     let params;
-    if (scope === 'public') {
+    if (scope === 'all') {
+      if (!req.user?.isAdmin) throw new HttpError(403, 'Admins only.', 'FORBIDDEN');
+      where = '1 = 1';
+      params = [];
+    } else if (scope === 'public') {
       where = 'is_public = 1';
       params = [];
     } else if (req.user) {

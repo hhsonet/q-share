@@ -50,8 +50,8 @@ export function AuthDialog({ open, onOpenChange, onAuthed }: Props) {
             </DialogDescription>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="auth-email" className="text-xs text-mute">Email</Label>
-            <Input id="auth-email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Label htmlFor="auth-email" className="text-xs text-mute">{isLogin ? 'Email or username' : 'Email'}</Label>
+            <Input id="auth-email" type={isLogin ? 'text' : 'email'} autoComplete={isLogin ? 'username' : 'email'} required value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="auth-password" className="text-xs text-mute">Password</Label>

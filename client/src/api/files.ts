@@ -13,10 +13,13 @@ export interface FileDto {
 
 export interface User {
   id: number
-  email: string
+  email: string | null
+  username: string | null
+  name: string
+  isAdmin: boolean
 }
 
-export type Scope = 'mine' | 'public'
+export type Scope = 'mine' | 'public' | 'all'
 
 export interface AppConfig {
   maxFileSize: number
@@ -151,6 +154,6 @@ const json = (body: unknown): RequestInit => ({
 export const getMe = () => request<{ user: User | null }>('/api/auth/me').then((r) => r.user)
 export const register = (email: string, password: string) =>
   request<{ user: User }>('/api/auth/register', json({ email, password })).then((r) => r.user)
-export const login = (email: string, password: string) =>
-  request<{ user: User }>('/api/auth/login', json({ email, password })).then((r) => r.user)
+export const login = (identifier: string, password: string) =>
+  request<{ user: User }>('/api/auth/login', json({ identifier, password })).then((r) => r.user)
 export const logout = () => request<void>('/api/auth/logout', { method: 'POST' })

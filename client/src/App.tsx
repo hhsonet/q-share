@@ -32,6 +32,7 @@ export default function App() {
       await logout()
     } finally {
       setUser(null)
+      if (scope === 'all') setScope('public')
       toast.success('Signed out')
     }
   }
@@ -57,9 +58,10 @@ export default function App() {
           {user ? (
             <div className="flex items-center gap-2 font-sans text-sm font-medium text-ink">
               <div className="grid size-7 place-items-center rounded-full bg-blue-tint text-xs font-semibold text-blue-ink" aria-hidden="true">
-                {user.email[0].toUpperCase()}
+                {user.name[0].toUpperCase()}
               </div>
-              <span className="hidden max-w-[160px] truncate sm:inline" title={user.email}>{user.email}</span>
+              <span className="hidden max-w-[160px] truncate sm:inline" title={user.name}>{user.name}</span>
+              {user.isAdmin && <span className="rounded-full bg-ink px-2 py-0.5 text-[11px] font-medium text-white">Admin</span>}
               <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Sign out" title="Sign out">
                 <LogOut />
               </Button>
@@ -99,6 +101,7 @@ export default function App() {
             query={list.query}
             sort={list.sort}
             scope={scope}
+            isAdmin={!!user?.isAdmin}
             publicUrl={publicUrl}
             onQueryChange={list.setQuery}
             onSortChange={list.setSort}

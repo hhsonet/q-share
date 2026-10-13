@@ -12,6 +12,7 @@ interface Props {
   query: string
   sort: SortKey
   scope: Scope
+  isAdmin: boolean
   publicUrl: string | null
   onQueryChange: (q: string) => void
   onSortChange: (s: SortKey) => void
@@ -29,6 +30,7 @@ const SORTS: { key: SortKey; label: string }[] = [
 const SCOPES: { key: Scope; label: string }[] = [
   { key: 'public', label: 'Public files' },
   { key: 'mine', label: 'Your files' },
+  { key: 'all', label: 'All files' },
 ]
 
 const shortDate = (iso: string) =>
@@ -42,13 +44,13 @@ function expiryText(expiresAt: string | null): string | null {
   return `${days}d left`
 }
 
-export function FileList({ files, loading, error, query, sort, scope, publicUrl, onQueryChange, onSortChange, onScopeChange, onDeleted }: Props) {
+export function FileList({ files, loading, error, query, sort, scope, isAdmin, publicUrl, onQueryChange, onSortChange, onScopeChange, onDeleted }: Props) {
   return (
     <section className="flex flex-col overflow-hidden rounded-[20px] border border-line bg-white shadow-[0_1px_2px_oklch(0.2_0.01_260/0.04)]" aria-label="Files">
       <div className="flex flex-col gap-3.5 px-5 pb-4 pt-5">
         <div className="flex items-center justify-between gap-3">
           <div role="group" aria-label="File list" className="flex items-baseline gap-4">
-            {SCOPES.map((t) => (
+            {SCOPES.filter((t) => t.key !== 'all' || isAdmin).map((t) => (
               <button
                 key={t.key}
                 type="button"

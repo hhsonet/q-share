@@ -100,6 +100,7 @@ export async function removeStored(storedName) {
 
 /** Whether the viewer ({ ownerHash, user }) owns this row. */
 export function isOwnerOf(row, viewer) {
+  if (viewer.user?.isAdmin) return true; // admins can manage every file
   if (row.user_id != null) return !!viewer.user && Number(row.user_id) === viewer.user.id;
   return !!viewer.ownerHash && row.owner_hash === viewer.ownerHash;
 }
