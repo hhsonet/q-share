@@ -27,8 +27,8 @@ const SORTS: { key: SortKey; label: string }[] = [
 ]
 
 const SCOPES: { key: Scope; label: string }[] = [
-  { key: 'mine', label: 'Your files' },
   { key: 'public', label: 'Public files' },
+  { key: 'mine', label: 'Your files' },
 ]
 
 const shortDate = (iso: string) =>

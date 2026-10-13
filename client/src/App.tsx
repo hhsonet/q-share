@@ -14,7 +14,7 @@ export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [authOpen, setAuthOpen] = useState(false)
-  const [scope, setScope] = useState<Scope>('mine')
+  const [scope, setScope] = useState<Scope>('public')
   const list = useFiles(scope, user?.id ?? null)
 
   useEffect(() => {
