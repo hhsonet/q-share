@@ -132,7 +132,7 @@ filesRouter.post('/', (req, res, next) => {
   });
 });
 
-// List files: scope=mine (default, the caller's own) or scope=public (everyone's public files).
+// List files: scope=mine (the caller's own), scope=public (everyone's public files plus the caller's private ones), scope=all (admin).
 filesRouter.get('/', async (req, res, next) => {
   try {
     const { q, sort, scope } = listQuery.parse(req.query);
@@ -143,8 +143,9 @@ filesRouter.get('/', async (req, res, next) => {
       where = '1 = 1';
       params = [];
     } else if (scope === 'public') {
-      where = 'is_public = 1';
-      params = [];
+      // Everyone sees public files; a signed-in user also sees their own private ones.
+      where = req.user ? '(is_public = 1 OR user_id = ?)' : 'is_public = 1';
+      params = req.user ? [req.user.id] : [];
     } else if (req.user) {
       where = 'user_id = ?';
       params = [req.user.id];
