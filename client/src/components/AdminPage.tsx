@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { KeyRound, Search } from 'lucide-react'
+import { CalendarClock, KeyRound, Search } from 'lucide-react'
 import {
   adminFiles, adminStats, adminUsers,
   type AdminFile, type AdminStats, type AdminUser, type SortKey,
 } from '@/api/files'
+import { ExpirySettings } from '@/components/ExpirySettings'
 import { ExtTile } from '@/components/ExtTile'
+import { FileExpiryDialog } from '@/components/FileExpiryDialog'
 import { FileActions } from '@/components/FileActions'
 import { ResetPasswordDialog } from '@/components/ResetPasswordDialog'
 import { Button } from '@/components/ui/button'
@@ -73,6 +75,7 @@ const Rows = () => (
 
 export function AdminPage({ publicUrl, currentUserId, onSelfReset }: { publicUrl: string | null; currentUserId: number; onSelfReset: () => void }) {
   const [resetUser, setResetUser] = useState<AdminUser | null>(null)
+  const [expiryFile, setExpiryFile] = useState<AdminFile | null>(null)
   const [tab, setTab] = useState<Tab>('files')
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -134,6 +137,8 @@ export function AdminPage({ publicUrl, currentUserId, onSelfReset }: { publicUrl
         <Stat label="Public files" value={stats ? stats.publicFiles : '…'} />
         <Stat label="Anonymous files" value={stats ? stats.anonymousFiles : '…'} />
       </div>
+
+      <ExpirySettings onApplied={refresh} />
 
       <section
         className="overflow-hidden rounded-[20px] border border-line bg-white shadow-[0_1px_2px_oklch(0.2_0.01_260/0.04)]"
@@ -243,7 +248,7 @@ export function AdminPage({ publicUrl, currentUserId, onSelfReset }: { publicUrl
               </tbody>
             </table>
           ) : (
-            <table className="w-full min-w-[820px] text-left text-sm">
+            <table className="w-full min-w-[1000px] text-left text-sm">
               <thead className="bg-paper font-mono text-[11.5px] uppercase tracking-wide text-mute">
                 <tr>
                   <th className="px-5 py-2.5 font-medium">File</th>
@@ -251,6 +256,7 @@ export function AdminPage({ publicUrl, currentUserId, onSelfReset }: { publicUrl
                   <th className="px-3 py-2.5 font-medium">Size</th>
                   <th className="px-3 py-2.5 font-medium">Visibility</th>
                   <th className="px-3 py-2.5 font-medium">Uploaded</th>
+                  <th className="px-3 py-2.5 font-medium">Expires</th>
                   <th className="px-3 py-2.5 font-medium">Downloads</th>
                   <th className="px-5 py-2.5 text-right font-medium">Actions</th>
                 </tr>
@@ -283,9 +289,13 @@ export function AdminPage({ publicUrl, currentUserId, onSelfReset }: { publicUrl
                       </span>
                     </td>
                     <td className="px-3 py-3 font-mono text-xs text-mute-2">{formatDateTime(f.createdAt)}</td>
+                    <td className="px-3 py-3 font-mono text-xs text-mute-2">{f.expiresAt ? formatDateTime(f.expiresAt) : 'Never'}</td>
                     <td className="px-3 py-3 font-mono text-xs text-mute-2">{f.downloadCount}</td>
                     <td className="px-5 py-3">
-                      <div className="flex justify-end">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => setExpiryFile(f)} aria-label={`Set expiry for ${f.name}`} title="Set expiry">
+                          <CalendarClock />
+                        </Button>
                         <FileActions file={f} publicUrl={publicUrl} onDeleted={refresh} />
                       </div>
                     </td>
@@ -293,7 +303,7 @@ export function AdminPage({ publicUrl, currentUserId, onSelfReset }: { publicUrl
                 ))}
                 {!files.length && (
                   <tr>
-                    <td colSpan={7} className="px-5 py-12 text-center text-mute">No files found.</td>
+                    <td colSpan={8} className="px-5 py-12 text-center text-mute">No files found.</td>
                   </tr>
                 )}
               </tbody>
@@ -302,6 +312,7 @@ export function AdminPage({ publicUrl, currentUserId, onSelfReset }: { publicUrl
         </div>
       </section>
 
+      <FileExpiryDialog file={expiryFile} onClose={() => setExpiryFile(null)} onSaved={refresh} />
       <ResetPasswordDialog
         user={resetUser}
         isSelf={resetUser?.id === currentUserId}

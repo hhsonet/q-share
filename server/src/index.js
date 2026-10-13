@@ -8,6 +8,7 @@ import { config } from './config.js';
 import { cleanupExpired, cleanupSessions } from './lib/cleanup.js';
 import { pool } from './lib/db.js';
 import { ensureStorage } from './lib/files.js';
+import { getExpiryHours } from './lib/settings.js';
 import { identityMiddleware } from './middleware/identity.js';
 import { ownerMiddleware } from './middleware/owner.js';
 import { adminRouter } from './routes/admin.js';
@@ -53,15 +54,19 @@ app.use('/api', limiter(config.rateLimit.max), express.json({ limit: '10kb' }), 
 app.post('/api/files', limiter(config.rateLimit.uploadMax));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
-app.get('/api/config', (_req, res) =>
-  res.json({
+app.get('/api/config', async (_req, res, next) => {
+  try {
+    res.json({
     maxFileSize: config.maxFileSize,
     maxFiles: config.maxFilesPerRequest,
     allowedExtensions: [...config.allowedExtensions].sort(),
-    expiryHours: config.expiryHours,
+    expiryHours: await getExpiryHours(),
     publicUrl: config.publicUrl || null,
-  }),
-);
+  });
+  } catch (e) {
+    next(e);
+  }
+});
 app.use('/api/admin', adminRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/files', filesRouter);

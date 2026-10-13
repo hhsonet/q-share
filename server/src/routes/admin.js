@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { hashPassword } from '../lib/auth.js';
+import { getExpiryHours, setExpiryHours } from '../lib/settings.js';
 import { pool } from '../lib/db.js';
 import { HttpError } from '../lib/errors.js';
-import { getExtension } from '../lib/files.js';
+import { PUBLIC_ID_RE, getExtension } from '../lib/files.js';
 
 export const adminRouter = Router();
 
@@ -141,6 +142,60 @@ adminRouter.post('/users/:id/reset-password', async (req, res, next) => {
     await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [hash, id]);
     await pool.query('DELETE FROM sessions WHERE user_id = ?', [id]);
     res.status(204).end();
+  } catch (e) {
+    next(e);
+  }
+});
+
+// --- expiry ---
+const MAX_DAYS = 3650;
+const daysSchema = z.number().int().min(1, 'Enter at least 1 day.').max(MAX_DAYS, `Maximum is ${MAX_DAYS} days.`);
+const defaultDays = z.number().int().min(0).max(MAX_DAYS);
+
+adminRouter.get('/settings', async (_req, res, next) => {
+  try {
+    res.json({ expiryDays: Math.round((await getExpiryHours()) / 24) });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Default expiry for NEW uploads, in days (0 = never expire).
+adminRouter.put('/settings', async (req, res, next) => {
+  try {
+    const r = z.object({ expiryDays: defaultDays }).safeParse(req.body);
+    if (!r.success) throw new HttpError(400, `Expiry must be 0 (never) to ${MAX_DAYS} days.`, 'BAD_REQUEST');
+    await setExpiryHours(r.data.expiryDays * 24);
+    res.json({ expiryDays: r.data.expiryDays });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Apply an expiry to EVERY existing file: upload date + N days (0 = never expire).
+adminRouter.post('/files/apply-expiry', async (req, res, next) => {
+  try {
+    const r = z.object({ days: defaultDays }).safeParse(req.body);
+    if (!r.success) throw new HttpError(400, `Expiry must be 0 (never) to ${MAX_DAYS} days.`, 'BAD_REQUEST');
+    const [result] = r.data.days
+      ? await pool.query('UPDATE files SET expires_at = DATE_ADD(created_at, INTERVAL ? DAY)', [r.data.days])
+      : await pool.query('UPDATE files SET expires_at = NULL');
+    res.json({ updated: result.affectedRows });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// One file: expire N days from now, or never (days = null).
+adminRouter.patch('/files/:id/expiry', async (req, res, next) => {
+  try {
+    if (!PUBLIC_ID_RE.test(req.params.id)) throw new HttpError(404, 'File not found.', 'NOT_FOUND');
+    const r = z.object({ days: daysSchema.nullable() }).safeParse(req.body);
+    if (!r.success) throw new HttpError(400, r.error.issues[0].message, 'BAD_REQUEST');
+    const expires = r.data.days === null ? null : new Date(Date.now() + r.data.days * 864e5);
+    const [result] = await pool.query('UPDATE files SET expires_at = ? WHERE public_id = ?', [expires, req.params.id]);
+    if (!result.affectedRows) throw new HttpError(404, 'File not found.', 'NOT_FOUND');
+    res.json({ expiresAt: expires ? expires.toISOString() : null });
   } catch (e) {
     next(e);
   }

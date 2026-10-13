@@ -4,6 +4,7 @@ import multer from 'multer';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { pool } from '../lib/db.js';
+import { getExpiryHours } from '../lib/settings.js';
 import { HttpError } from '../lib/errors.js';
 import {
   PUBLIC_ID_RE,
@@ -88,6 +89,7 @@ filesRouter.post('/', (req, res, next) => {
       const userId = req.user ? req.user.id : null;
       const viewer = { ownerHash: req.ownerHash, user: req.user };
 
+      const expiryHours = await getExpiryHours();
       const created = [];
       const placed = [];
       try {
@@ -100,7 +102,7 @@ filesRouter.post('/', (req, res, next) => {
           const storedName = newStoredName();
           const publicId = newPublicId();
           const now = new Date();
-          const expires = config.expiryHours ? new Date(now.getTime() + config.expiryHours * 3600_000) : null;
+          const expires = expiryHours ? new Date(now.getTime() + expiryHours * 3600_000) : null;
 
           await moveIntoStorage(f.path, storedName);
           placed.push(storedName);

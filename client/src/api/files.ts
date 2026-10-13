@@ -194,3 +194,10 @@ export const adminResetPassword = (id: number, password: string) =>
   request<void>(`/api/admin/users/${id}/reset-password`, json({ password }))
 export const changePassword = (currentPassword: string, newPassword: string) =>
   request<void>('/api/auth/change-password', json({ currentPassword, newPassword }))
+export const adminGetSettings = () => request<{ expiryDays: number }>('/api/admin/settings')
+export const adminSetDefaultExpiry = (expiryDays: number) =>
+  request<{ expiryDays: number }>('/api/admin/settings', { ...json({ expiryDays }), method: 'PUT' })
+export const adminApplyExpiryToAll = (days: number) =>
+  request<{ updated: number }>('/api/admin/files/apply-expiry', json({ days }))
+export const adminSetFileExpiry = (id: string, days: number | null) =>
+  request<{ expiresAt: string | null }>(`/api/admin/files/${encodeURIComponent(id)}/expiry`, { ...json({ days }), method: 'PATCH' })
