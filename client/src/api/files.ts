@@ -17,6 +17,7 @@ export interface User {
   username: string | null
   name: string
   isAdmin: boolean
+  createdAt: string | null
 }
 
 export type Scope = 'mine' | 'public' | 'all'
@@ -191,3 +192,5 @@ export const adminFiles = (q: string, sort: SortKey, filter: string) =>
   request<{ files: AdminFile[] }>(`/api/admin/files?${new URLSearchParams({ q, sort, filter })}`).then((r) => r.files)
 export const adminResetPassword = (id: number, password: string) =>
   request<void>(`/api/admin/users/${id}/reset-password`, json({ password }))
+export const changePassword = (currentPassword: string, newPassword: string) =>
+  request<void>('/api/auth/change-password', json({ currentPassword, newPassword }))

@@ -77,7 +77,7 @@ authRouter.post('/login', async (req, res, next) => {
     if (!parsed.success) throw new HttpError(400, 'Enter your email or username and password.', 'BAD_REQUEST');
     const { identifier, password } = parsed.data;
     const [rows] = await pool.query(
-      'SELECT id, email, username, is_admin, password_hash FROM users WHERE email = ? OR username = ? LIMIT 1',
+      'SELECT id, email, username, is_admin, created_at, password_hash FROM users WHERE email = ? OR username = ? LIMIT 1',
       [identifier, identifier],
     );
     const u = rows[0];
@@ -98,6 +98,29 @@ authRouter.post('/logout', async (req, res, next) => {
       await pool.query('DELETE FROM sessions WHERE token_hash = ?', [hashSession(token)]);
     }
     clearSessionCookie(res);
+    res.status(204).end();
+  } catch (e) {
+    next(e);
+  }
+});
+
+const changeSchema = z.object({
+  currentPassword: z.string().min(1).max(200),
+  newPassword: z.string().min(8, 'New password must be at least 8 characters.').max(200),
+});
+
+// Signed-in users change their own password; all other sessions are ended.
+authRouter.post('/change-password', async (req, res, next) => {
+  try {
+    if (!req.user) throw new HttpError(401, 'Sign in required.', 'UNAUTHORIZED');
+    const parsed = changeSchema.safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, parsed.error.issues[0].message, 'BAD_REQUEST');
+    const [rows] = await pool.query('SELECT password_hash FROM users WHERE id = ? LIMIT 1', [req.user.id]);
+    const ok = rows[0] && (await verifyPassword(parsed.data.currentPassword, rows[0].password_hash));
+    if (!ok) throw new HttpError(400, 'Current password is incorrect.', 'BAD_CREDENTIALS');
+    await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [await hashPassword(parsed.data.newPassword), req.user.id]);
+    await pool.query('DELETE FROM sessions WHERE user_id = ?', [req.user.id]);
+    await startSession(res, req.user.id);
     res.status(204).end();
   } catch (e) {
     next(e);

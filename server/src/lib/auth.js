@@ -58,5 +58,6 @@ export function toUser(row) {
     username: row.username ?? null,
     name: row.username || row.email,
     isAdmin: !!row.is_admin,
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
   };
 }

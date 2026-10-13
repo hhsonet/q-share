@@ -9,7 +9,7 @@ export async function identityMiddleware(req, _res, next) {
     const token = parseCookies(req.headers.cookie)[SESSION_COOKIE];
     if (token && /^[a-f0-9]{64}$/.test(token)) {
       const [rows] = await pool.query(
-        `SELECT u.id, u.email, u.username, u.is_admin FROM sessions s JOIN users u ON u.id = s.user_id
+        `SELECT u.id, u.email, u.username, u.is_admin, u.created_at FROM sessions s JOIN users u ON u.id = s.user_id
          WHERE s.token_hash = ? AND s.expires_at > UTC_TIMESTAMP() LIMIT 1`,
         [hashSession(token)],
       );

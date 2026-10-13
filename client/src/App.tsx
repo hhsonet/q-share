@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
-import { LogOut, Shield, User as UserIcon } from 'lucide-react'
+import { ArrowLeft, User as UserIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { getConfig, getMe, logout, type AppConfig, type FileDto, type Scope, type User } from '@/api/files'
 import { AdminPage } from '@/components/AdminPage'
 import { AuthDialog } from '@/components/AuthDialog'
 import { FileList } from '@/components/FileList'
+import { ProfileDialog } from '@/components/ProfileDialog'
 import { UploadCard } from '@/components/UploadCard'
+import { UserMenu } from '@/components/UserMenu'
 import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/sonner'
 import { useFiles } from '@/hooks/useFiles'
@@ -16,6 +18,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null)
   const [authReady, setAuthReady] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   const [scope, setScope] = useState<Scope>('public')
   const [hash, setHash] = useState(() => window.location.hash)
   const list = useFiles(scope, user?.id ?? null)
@@ -75,23 +78,19 @@ export default function App() {
             </>
           )}
           {user ? (
-            <div className="flex items-center gap-2 font-sans text-sm font-medium text-ink">
-              <div className="grid size-7 place-items-center rounded-full bg-blue-tint text-xs font-semibold text-blue-ink" aria-hidden="true">
-                {user.name[0].toUpperCase()}
-              </div>
-              <span className="hidden max-w-[160px] truncate sm:inline" title={user.name}>{user.name}</span>
-              {user.isAdmin && (
-                <a
-                  href={showAdmin ? '#' : '#admin'}
-                  className="inline-flex items-center gap-1 rounded-full bg-ink px-2.5 py-1 text-[11px] font-medium !text-white hover:bg-ink-soft"
-                >
-                  <Shield className="size-3" aria-hidden="true" />
-                  {showAdmin ? 'Back to site' : 'Admin'}
+            <div className="flex items-center gap-3 font-sans">
+              {showAdmin && (
+                <a href="#" className="inline-flex items-center gap-1.5 text-sm font-medium !text-mute-2 hover:!text-ink">
+                  <ArrowLeft className="size-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">Back to site</span>
                 </a>
               )}
-              <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Sign out" title="Sign out">
-                <LogOut />
-              </Button>
+              <UserMenu
+                user={user}
+                onProfile={() => setProfileOpen(true)}
+                onAdmin={() => { window.location.hash = '#admin' }}
+                onSignOut={handleLogout}
+              />
             </div>
           ) : (
             <div className="flex items-center gap-2.5 font-sans">
@@ -157,6 +156,7 @@ export default function App() {
         )}
       </main>
 
+      <ProfileDialog user={user} open={profileOpen} onOpenChange={setProfileOpen} />
       <AuthDialog open={authOpen} onOpenChange={setAuthOpen} onAuthed={setUser} />
       <Toaster />
     </div>
