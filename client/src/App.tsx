@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { User } from 'lucide-react'
+import { toast } from 'sonner'
 import { getConfig, type AppConfig, type FileDto } from '@/api/files'
 import { FileList } from '@/components/FileList'
-import { SharePanel } from '@/components/SharePanel'
 import { UploadCard } from '@/components/UploadCard'
 import { Toaster } from '@/components/ui/sonner'
 import { useFiles } from '@/hooks/useFiles'
@@ -10,7 +10,6 @@ import { formatBytes } from '@/lib/utils'
 
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null)
-  const [recent, setRecent] = useState<FileDto[]>([])
   const list = useFiles()
 
   useEffect(() => {
@@ -18,12 +17,11 @@ export default function App() {
   }, [])
 
   const handleUploaded = (files: FileDto[]) => {
-    setRecent((r) => [...files, ...r])
+    toast.success(files.length === 1 ? `Uploaded ${files[0].name}` : `${files.length} files uploaded`)
     list.reload()
   }
 
   const handleDeleted = (id: string) => {
-    setRecent((r) => r.filter((f) => f.id !== id))
     list.removeLocal(id)
   }
 
@@ -66,7 +64,6 @@ export default function App() {
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,440px),1fr))] items-start gap-6">
           <div className="flex flex-col gap-6">
             <UploadCard config={config} onUploaded={handleUploaded} />
-            <SharePanel files={recent} publicUrl={publicUrl} onDeleted={handleDeleted} onDismiss={() => setRecent([])} />
           </div>
           <FileList
             files={list.files}

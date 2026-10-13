@@ -104,7 +104,6 @@ export function UploadCard({ config, onUploaded }: Props) {
     setQueue((q) => q.filter((i) => i.status !== 'done')) // closes the modal; share popup takes over
     if (done.length) {
       onUploaded(done)
-      toast.success(done.length === 1 ? 'Uploaded — link ready' : `${done.length} files uploaded`)
     }
     if (failed) toast.error(`${failed} upload${failed > 1 ? 's' : ''} failed`, { description: 'See the errors in the list and retry.' })
   }
