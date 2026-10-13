@@ -16,7 +16,7 @@ import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 import { cn, formatBytes, formatDateTime } from '@/lib/utils'
 
-type Tab = 'users' | 'files'
+type Tab = 'users' | 'files' | 'settings'
 
 const SORTS: { key: SortKey; label: string }[] = [
   { key: 'newest', label: 'Newest' },
@@ -97,11 +97,11 @@ export function AdminPage({ publicUrl, currentUserId, onSelfReset }: { publicUrl
     const t = setTimeout(async () => {
       try {
         const s = await adminStats()
-        const rows = tab === 'users' ? await adminUsers(q.trim()) : await adminFiles(q.trim(), sort, filter)
+        const rows = tab === 'settings' ? null : tab === 'users' ? await adminUsers(q.trim()) : await adminFiles(q.trim(), sort, filter)
         if (!live) return
         setStats(s)
         if (tab === 'users') setUsers(rows as AdminUser[])
-        else setFiles(rows as AdminFile[])
+        else if (tab === 'files') setFiles(rows as AdminFile[])
         setError(null)
       } catch (e) {
         if (live) setError(e instanceof Error ? e.message : 'Could not load admin data.')
@@ -142,7 +142,7 @@ export function AdminPage({ publicUrl, currentUserId, onSelfReset }: { publicUrl
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-[clamp(26px,3.4vw,36px)] font-semibold tracking-[-0.03em]">Admin</h1>
-        <p className="mt-1 text-mute">Users and uploaded files across the whole site.</p>
+        <p className="mt-1 text-mute">Users, uploaded files and site settings.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -153,21 +153,28 @@ export function AdminPage({ publicUrl, currentUserId, onSelfReset }: { publicUrl
         <Stat label="Anonymous files" value={stats ? stats.anonymousFiles : '…'} />
       </div>
 
-      <ExpirySettings onApplied={refresh} />
+      <Segmented
+        label="Admin section"
+        value={tab}
+        onChange={(t) => { setTab(t); setQ('') }}
+        items={[
+          { key: 'files' as Tab, label: 'Files' },
+          { key: 'users' as Tab, label: 'Users' },
+          { key: 'settings' as Tab, label: 'Settings' },
+        ]}
+      />
 
-      <AllowedTypesSettings />
-
+      {tab === 'settings' ? (
+        <div className="flex flex-col gap-6">
+          <ExpirySettings onApplied={refresh} />
+          <AllowedTypesSettings />
+        </div>
+      ) : (
       <section
         className="overflow-hidden rounded-[20px] border border-line bg-white shadow-[0_1px_2px_oklch(0.2_0.01_260/0.04)]"
         aria-label="Admin data"
       >
         <div className="flex flex-col gap-3.5 px-5 pb-4 pt-5">
-          <Segmented
-            label="Section"
-            value={tab}
-            onChange={(t) => { setTab(t); setQ('') }}
-            items={[{ key: 'files' as Tab, label: 'Files' }, { key: 'users' as Tab, label: 'Users' }]}
-          />
           <div className="flex flex-wrap gap-2">
             <label className="flex h-[38px] min-w-[200px] flex-1 items-center gap-2 rounded-[10px] bg-fill px-3 text-mute focus-within:ring-2 focus-within:ring-ring/40">
               <Search className="size-[15px]" aria-hidden="true" />
@@ -329,6 +336,7 @@ export function AdminPage({ publicUrl, currentUserId, onSelfReset }: { publicUrl
           )}
         </div>
       </section>
+      )}
 
       <FileExpiryDialog file={expiryFile} onClose={() => setExpiryFile(null)} onSaved={refresh} />
       <ResetPasswordDialog
