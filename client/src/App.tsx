@@ -1,19 +1,25 @@
 import { useEffect, useState } from 'react'
-import { User } from 'lucide-react'
+import { LogOut, User as UserIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { getConfig, type AppConfig, type FileDto } from '@/api/files'
+import { getConfig, getMe, logout, type AppConfig, type FileDto, type Scope, type User } from '@/api/files'
+import { AuthDialog } from '@/components/AuthDialog'
 import { FileList } from '@/components/FileList'
 import { UploadCard } from '@/components/UploadCard'
+import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/sonner'
 import { useFiles } from '@/hooks/useFiles'
 import { formatBytes } from '@/lib/utils'
 
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null)
-  const list = useFiles()
+  const [user, setUser] = useState<User | null>(null)
+  const [authOpen, setAuthOpen] = useState(false)
+  const [scope, setScope] = useState<Scope>('mine')
+  const list = useFiles(scope, user?.id ?? null)
 
   useEffect(() => {
     getConfig().then(setConfig).catch(() => setConfig(null))
+    getMe().then(setUser).catch(() => setUser(null))
   }, [])
 
   const handleUploaded = (files: FileDto[]) => {
@@ -21,13 +27,19 @@ export default function App() {
     list.reload()
   }
 
-  const handleDeleted = (id: string) => {
-    list.removeLocal(id)
+  const handleLogout = async () => {
+    try {
+      await logout()
+    } finally {
+      setUser(null)
+      toast.success('Signed out')
+    }
   }
 
   const publicUrl = config?.publicUrl ?? null
   const total = list.files.reduce((n, f) => n + f.size, 0)
-  const storageLabel = `${list.files.length} ${list.files.length === 1 ? 'file' : 'files'} · ${formatBytes(total)}`
+  const count = `${list.files.length} ${scope === 'public' ? 'public ' : ''}${list.files.length === 1 ? 'file' : 'files'}`
+  const storageLabel = `${count} · ${formatBytes(total)}`
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -40,14 +52,29 @@ export default function App() {
         </div>
         <div className="flex items-center gap-2 font-mono text-xs text-mute">
           <span className="size-1.5 rounded-full bg-ok" aria-hidden="true" />
-          <span>{list.loading ? '…' : storageLabel}</span>
+          <span className="hidden sm:inline">{list.loading ? '…' : storageLabel}</span>
           <div className="mx-2 hidden h-5 w-px bg-line sm:block" aria-hidden="true" />
-          <div className="hidden items-center gap-2 font-sans text-sm font-medium text-mute-2 sm:flex">
-            <div className="grid size-7 place-items-center rounded-full border border-dashed border-line-strong bg-fill-2 text-mute" aria-hidden="true">
-              <User className="size-3.5" />
+          {user ? (
+            <div className="flex items-center gap-2 font-sans text-sm font-medium text-ink">
+              <div className="grid size-7 place-items-center rounded-full bg-blue-tint text-xs font-semibold text-blue-ink" aria-hidden="true">
+                {user.email[0].toUpperCase()}
+              </div>
+              <span className="hidden max-w-[160px] truncate sm:inline" title={user.email}>{user.email}</span>
+              <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Sign out" title="Sign out">
+                <LogOut />
+              </Button>
             </div>
-            Anonymous
-          </div>
+          ) : (
+            <div className="flex items-center gap-2.5 font-sans">
+              <div className="hidden items-center gap-2 text-sm font-medium text-mute-2 sm:flex">
+                <div className="grid size-7 place-items-center rounded-full border border-dashed border-line-strong bg-fill-2 text-mute" aria-hidden="true">
+                  <UserIcon className="size-3.5" />
+                </div>
+                Anonymous
+              </div>
+              <Button size="sm" onClick={() => setAuthOpen(true)}>Sign in</Button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -57,13 +84,13 @@ export default function App() {
             Upload once.<span className="text-[oklch(0.5_0.01_260)]"> Download anytime.</span>
           </h1>
           <p className="text-pretty text-base leading-normal text-mute">
-            Every file gets its own private link. Nothing to sign up for — links expire automatically.
+            Every file gets its own link. Nothing to sign up for — links expire automatically.
           </p>
         </div>
 
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,440px),1fr))] items-start gap-6">
           <div className="flex flex-col gap-6">
-            <UploadCard config={config} onUploaded={handleUploaded} />
+            <UploadCard config={config} user={user} onUploaded={handleUploaded} onSignIn={() => setAuthOpen(true)} />
           </div>
           <FileList
             files={list.files}
@@ -71,14 +98,17 @@ export default function App() {
             error={list.error}
             query={list.query}
             sort={list.sort}
+            scope={scope}
             publicUrl={publicUrl}
             onQueryChange={list.setQuery}
             onSortChange={list.setSort}
-            onDeleted={handleDeleted}
+            onScopeChange={setScope}
+            onDeleted={list.removeLocal}
           />
         </div>
       </main>
 
+      <AuthDialog open={authOpen} onOpenChange={setAuthOpen} onAuthed={setUser} />
       <Toaster />
     </div>
   )

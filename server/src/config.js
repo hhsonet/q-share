@@ -53,6 +53,7 @@ export const config = {
     windowMs: int(process.env.RATE_LIMIT_WINDOW_MINUTES, 15) * 60 * 1000,
     max: int(process.env.RATE_LIMIT_MAX, 300),
     uploadMax: int(process.env.UPLOAD_RATE_LIMIT_MAX, 60),
+    authMax: int(process.env.AUTH_RATE_LIMIT_MAX, 20),
   },
 };
 

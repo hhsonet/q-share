@@ -12,6 +12,7 @@ import {
   mimeFor,
   moveIntoStorage,
   newPublicId,
+  isOwnerOf,
   newStoredName,
   removeStored,
   sanitizeOriginalName,
@@ -27,7 +28,7 @@ const upload = multer({
     destination: (_req, _file, cb) => cb(null, tmpDir()),
     filename: (_req, _file, cb) => cb(null, newStoredName()),
   }),
-  limits: { fileSize: config.maxFileSize, files: config.maxFilesPerRequest, fields: 0 },
+  limits: { fileSize: config.maxFileSize, files: config.maxFilesPerRequest, fields: 2 },
   fileFilter: (_req, file, cb) => {
     const problem = checkExtension(sanitizeOriginalName(file.originalname));
     cb(problem ? new HttpError(415, problem, 'TYPE_NOT_ALLOWED') : null, !problem);
@@ -39,6 +40,7 @@ const discard = (files) => Promise.all((files || []).map((f) => fs.unlink(f.path
 const listQuery = z.object({
   q: z.string().trim().max(100).optional().default(''),
   sort: z.enum(['newest', 'oldest', 'name', 'size']).optional().default('newest'),
+  scope: z.enum(['mine', 'public']).optional().default('mine'),
 });
 
 const SORT_SQL = {
@@ -81,6 +83,11 @@ filesRouter.post('/', (req, res, next) => {
       const files = req.files || [];
       if (!files.length) throw new HttpError(400, 'No file received.', 'NO_FILE');
 
+      // Anonymous uploads are always public; signed-in users choose (default private).
+      const isPublic = req.user ? req.body?.public === '1' : true;
+      const userId = req.user ? req.user.id : null;
+      const viewer = { ownerHash: req.ownerHash, user: req.user };
+
       const created = [];
       const placed = [];
       try {
@@ -98,13 +105,13 @@ filesRouter.post('/', (req, res, next) => {
           await moveIntoStorage(f.path, storedName);
           placed.push(storedName);
           await pool.query(
-            `INSERT INTO files (public_id, original_name, stored_name, mime_type, size, owner_hash, created_at, expires_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [publicId, name, storedName, mimeFor(name), f.size, req.ownerHash, now, expires],
+            `INSERT INTO files (public_id, original_name, stored_name, mime_type, size, owner_hash, is_public, user_id, created_at, expires_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [publicId, name, storedName, mimeFor(name), f.size, req.ownerHash, isPublic ? 1 : 0, userId, now, expires],
           );
           created.push({
             public_id: publicId, original_name: name, mime_type: mimeFor(name), size: f.size,
-            owner_hash: req.ownerHash, created_at: now, expires_at: expires, download_count: 0,
+            owner_hash: req.ownerHash, is_public: isPublic ? 1 : 0, user_id: userId, created_at: now, expires_at: expires, download_count: 0,
           });
         }
       } catch (e) {
@@ -116,27 +123,40 @@ filesRouter.post('/', (req, res, next) => {
         }
         throw e;
       }
-      res.status(201).json({ files: created.map((c) => toDto(c, req.ownerHash)) });
+      res.status(201).json({ files: created.map((c) => toDto(c, viewer)) });
     } catch (e) {
       next(e);
     }
   });
 });
 
-// List the caller's files.
+// List files: scope=mine (default, the caller's own) or scope=public (everyone's public files).
 filesRouter.get('/', async (req, res, next) => {
   try {
-    requireOwner(req);
-    const { q, sort } = listQuery.parse(req.query);
+    const { q, sort, scope } = listQuery.parse(req.query);
+    let where;
+    let params;
+    if (scope === 'public') {
+      where = 'is_public = 1';
+      params = [];
+    } else if (req.user) {
+      where = 'user_id = ?';
+      params = [req.user.id];
+    } else {
+      requireOwner(req);
+      where = 'user_id IS NULL AND owner_hash = ?';
+      params = [req.ownerHash];
+    }
     const like = `%${q.replace(/[\\%_]/g, '\\$&')}%`;
     const [rows] = await pool.query(
       `SELECT * FROM files
-       WHERE owner_hash = ? AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
+       WHERE ${where} AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
          AND original_name LIKE ? ESCAPE '\\\\'
        ORDER BY ${SORT_SQL[sort]} LIMIT 500`,
-      [req.ownerHash, like],
+      [...params, like],
     );
-    res.json({ files: rows.map((r) => toDto(r, req.ownerHash)) });
+    const viewer = { ownerHash: req.ownerHash, user: req.user };
+    res.json({ files: rows.map((r) => toDto(r, viewer)) });
   } catch (e) {
     next(e);
   }
@@ -146,7 +166,7 @@ filesRouter.get('/', async (req, res, next) => {
 filesRouter.get('/:id', async (req, res, next) => {
   try {
     const row = await findFile(req.params.id);
-    res.json({ file: toDto(row, req.ownerHash) });
+    res.json({ file: toDto(row, { ownerHash: req.ownerHash, user: req.user }) });
   } catch (e) {
     next(e);
   }
@@ -178,12 +198,12 @@ filesRouter.get('/:id/download', async (req, res, next) => {
 // Delete (owner only).
 filesRouter.delete('/:id', async (req, res, next) => {
   try {
-    requireOwner(req);
+    if (!req.user) requireOwner(req);
     if (!PUBLIC_ID_RE.test(req.params.id)) throw new HttpError(404, 'File not found.', 'NOT_FOUND');
     const [rows] = await pool.query('SELECT * FROM files WHERE public_id = ? LIMIT 1', [req.params.id]);
     const row = rows[0];
     if (!row) throw new HttpError(404, 'File not found.', 'NOT_FOUND');
-    if (row.owner_hash !== req.ownerHash) throw new HttpError(403, 'You are not allowed to delete this file.', 'FORBIDDEN');
+    if (!isOwnerOf(row, { ownerHash: req.ownerHash, user: req.user })) throw new HttpError(403, 'You are not allowed to delete this file.', 'FORBIDDEN');
     await removeStored(row.stored_name);
     await pool.query('DELETE FROM files WHERE id = ?', [row.id]);
     res.status(204).end();

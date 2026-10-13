@@ -10,7 +10,9 @@ Simple file sharing: upload once, download anytime via an unguessable link or fi
 
 - Each upload gets a 144-bit random **file ID** (24 chars). The download link is `/api/files/<id>/download`; anyone with the link can download until it expires.
 - Files are stored on disk under random server-generated names; the original filename lives only in the DB.
-- **Ownership:** no accounts. Each browser generates a random owner token (kept in `localStorage`, no file data). Only its SHA-256 hash is stored. The token is required to list and delete your files. Clearing browser storage means you lose the ability to list/delete (links still work).
+- **Visibility:** anonymous uploads are always **public** (listed in "Public files" for everyone). Signed-in users get a "Make public" switch per upload; the default is **private** (unlisted, reachable only by its link). Anyone with a file's link can still download it.
+- **Accounts:** optional email + password (scrypt-hashed, httpOnly session cookie, 30 days). Signed-in users manage their files from any browser.
+- **Anonymous ownership:** an anonymous browser keeps a random owner token in `localStorage` (only its SHA-256 is stored) so it can list and delete its own uploads. Clearing storage loses that ability; links keep working.
 - Expired files return `410` and are removed by a cleanup job.
 
 ## API
@@ -18,8 +20,10 @@ Simple file sharing: upload once, download anytime via an unguessable link or fi
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/config` | Limits, allowed extensions, expiry |
-| POST | `/api/files` | Upload (`multipart`, field `files`, header `X-Owner-Token`) |
-| GET | `/api/files?q=&sort=newest\|oldest\|name` | List your files |
+| POST | `/api/files` | Upload (`multipart`: field `public`=`1`/`0` first, then `files`; header `X-Owner-Token`) |
+| GET | `/api/files?scope=mine|public&q=&sort=newest|oldest|name|size` | List your files, or everyone's public files |
+| POST | `/api/auth/register`, `/login`, `/logout` | Accounts |
+| GET | `/api/auth/me` | Current user or `null` |
 | GET | `/api/files/:id` | File metadata |
 | GET | `/api/files/:id/download` | Download |
 | DELETE | `/api/files/:id` | Delete (owner only) |

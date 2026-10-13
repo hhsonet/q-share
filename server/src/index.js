@@ -5,10 +5,12 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import { config } from './config.js';
-import { cleanupExpired } from './lib/cleanup.js';
+import { cleanupExpired, cleanupSessions } from './lib/cleanup.js';
 import { pool } from './lib/db.js';
 import { ensureStorage } from './lib/files.js';
+import { identityMiddleware } from './middleware/identity.js';
 import { ownerMiddleware } from './middleware/owner.js';
+import { authRouter } from './routes/auth.js';
 import { filesRouter } from './routes/files.js';
 
 await ensureStorage();
@@ -34,7 +36,7 @@ app.use(
   }),
 );
 if (config.corsOrigin) {
-  app.use(cors({ origin: config.corsOrigin.split(','), allowedHeaders: ['X-Owner-Token', 'Content-Type'], exposedHeaders: ['Content-Disposition'] }));
+  app.use(cors({ origin: config.corsOrigin.split(','), allowedHeaders: ['X-Owner-Token', 'Content-Type'], credentials: true, exposedHeaders: ['Content-Disposition'] }));
 }
 
 const limiter = (max) =>
@@ -46,7 +48,7 @@ const limiter = (max) =>
     message: { error: { code: 'RATE_LIMITED', message: 'Too many requests. Please try again later.' } },
   });
 
-app.use('/api', limiter(config.rateLimit.max), ownerMiddleware);
+app.use('/api', limiter(config.rateLimit.max), express.json({ limit: '10kb' }), ownerMiddleware, identityMiddleware);
 app.post('/api/files', limiter(config.rateLimit.uploadMax));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
@@ -59,6 +61,7 @@ app.get('/api/config', (_req, res) =>
     publicUrl: config.publicUrl || null,
   }),
 );
+app.use('/api/auth', authRouter);
 app.use('/api/files', filesRouter);
 app.use('/api', (_req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Not found.' } }));
 
@@ -87,7 +90,7 @@ const server = app.listen(config.port, config.host, () => {
 });
 
 if (config.cleanupIntervalMinutes) {
-  const run = () => cleanupExpired().catch((e) => console.error('cleanup error', e.code || e.message));
+  const run = () => Promise.all([cleanupExpired(), cleanupSessions()]).catch((e) => console.error('cleanup error', e.code || e.message));
   run();
   setInterval(run, config.cleanupIntervalMinutes * 60_000).unref();
 }

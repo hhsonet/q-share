@@ -7,8 +7,16 @@ export interface FileDto {
   createdAt: string
   expiresAt: string | null
   downloadCount: number
+  isPublic: boolean
   isOwner: boolean
 }
+
+export interface User {
+  id: number
+  email: string
+}
+
+export type Scope = 'mine' | 'public'
 
 export interface AppConfig {
   maxFileSize: number
@@ -77,8 +85,8 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const getConfig = () => request<AppConfig>('/api/config')
 
-export const listFiles = (q: string, sort: SortKey, signal?: AbortSignal) =>
-  request<{ files: FileDto[] }>(`/api/files?${new URLSearchParams({ q, sort })}`, { signal }).then((r) => r.files)
+export const listFiles = (q: string, sort: SortKey, scope: Scope, signal?: AbortSignal) =>
+  request<{ files: FileDto[] }>(`/api/files?${new URLSearchParams({ q, sort, scope })}`, { signal }).then((r) => r.files)
 
 export const getFile = (id: string) => request<{ file: FileDto }>(`/api/files/${encodeURIComponent(id)}`).then((r) => r.file)
 
@@ -92,10 +100,16 @@ export function shareUrl(id: string, publicUrl?: string | null): string {
 }
 
 /** Uploads one file with progress. Rejects with ApiError; abort via signal. */
-export function uploadFile(file: File, onProgress: (pct: number) => void, signal: AbortSignal): Promise<FileDto> {
+export function uploadFile(
+  file: File,
+  onProgress: (pct: number) => void,
+  signal: AbortSignal,
+  isPublic = false,
+): Promise<FileDto> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     const form = new FormData()
+    form.append('public', isPublic ? '1' : '0') // must precede the file part
     form.append('files', file, file.name)
 
     xhr.open('POST', '/api/files')
@@ -126,3 +140,17 @@ export function uploadFile(file: File, onProgress: (pct: number) => void, signal
     xhr.send(form)
   })
 }
+
+// --- auth (session cookie is httpOnly; the server tells us who we are) ---
+const json = (body: unknown): RequestInit => ({
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+})
+
+export const getMe = () => request<{ user: User | null }>('/api/auth/me').then((r) => r.user)
+export const register = (email: string, password: string) =>
+  request<{ user: User }>('/api/auth/register', json({ email, password })).then((r) => r.user)
+export const login = (email: string, password: string) =>
+  request<{ user: User }>('/api/auth/login', json({ email, password })).then((r) => r.user)
+export const logout = () => request<void>('/api/auth/logout', { method: 'POST' })

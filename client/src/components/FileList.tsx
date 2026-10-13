@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react'
-import type { FileDto, SortKey } from '@/api/files'
+import type { FileDto, Scope, SortKey } from '@/api/files'
 import { ExtTile } from '@/components/ExtTile'
 import { FileActions } from '@/components/FileActions'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -11,9 +11,11 @@ interface Props {
   error: string | null
   query: string
   sort: SortKey
+  scope: Scope
   publicUrl: string | null
   onQueryChange: (q: string) => void
   onSortChange: (s: SortKey) => void
+  onScopeChange: (s: Scope) => void
   onDeleted: (id: string) => void
 }
 
@@ -22,6 +24,11 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: 'oldest', label: 'Oldest' },
   { key: 'name', label: 'Name' },
   { key: 'size', label: 'Size' },
+]
+
+const SCOPES: { key: Scope; label: string }[] = [
+  { key: 'mine', label: 'Your files' },
+  { key: 'public', label: 'Public files' },
 ]
 
 const shortDate = (iso: string) =>
@@ -35,12 +42,27 @@ function expiryText(expiresAt: string | null): string | null {
   return `${days}d left`
 }
 
-export function FileList({ files, loading, error, query, sort, publicUrl, onQueryChange, onSortChange, onDeleted }: Props) {
+export function FileList({ files, loading, error, query, sort, scope, publicUrl, onQueryChange, onSortChange, onScopeChange, onDeleted }: Props) {
   return (
-    <section className="flex flex-col overflow-hidden rounded-[20px] border border-line bg-white shadow-[0_1px_2px_oklch(0.2_0.01_260/0.04)]" aria-labelledby="files-title">
+    <section className="flex flex-col overflow-hidden rounded-[20px] border border-line bg-white shadow-[0_1px_2px_oklch(0.2_0.01_260/0.04)]" aria-label="Files">
       <div className="flex flex-col gap-3.5 px-5 pb-4 pt-5">
-        <div className="flex items-baseline gap-2.5">
-          <h2 id="files-title" className="text-lg font-semibold tracking-[-0.015em]">Your files</h2>
+        <div className="flex items-center justify-between gap-3">
+          <div role="group" aria-label="File list" className="flex items-baseline gap-4">
+            {SCOPES.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => onScopeChange(t.key)}
+                aria-pressed={scope === t.key}
+                className={cn(
+                  'text-lg font-semibold tracking-[-0.015em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  scope === t.key ? 'text-ink' : 'text-mute hover:text-ink',
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
           <span className="font-mono text-xs text-mute" aria-label={`${files.length} files`}>{loading ? '' : files.length}</span>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -93,7 +115,7 @@ export function FileList({ files, loading, error, query, sort, publicUrl, onQuer
         ) : files.length === 0 ? (
           <div className="flex flex-col gap-1 px-5 py-12 text-center">
             <p className="text-sm font-medium">{query ? 'No matches' : 'No files yet'}</p>
-            <p className="text-[13px] text-mute">{query ? 'Try a different filename.' : 'Uploads from this browser show up here.'}</p>
+            <p className="text-[13px] text-mute">{query ? 'Try a different filename.' : scope === 'public' ? 'Public uploads show up here.' : 'Uploads from this browser show up here.'}</p>
           </div>
         ) : (
           <ul className="max-h-[75vh] overflow-y-auto">
@@ -105,7 +127,7 @@ export function FileList({ files, loading, error, query, sort, publicUrl, onQuer
                   <div className="flex min-w-0 flex-col gap-[3px]">
                     <div className="truncate text-sm font-medium" title={f.name}>{f.name}</div>
                     <div className="font-mono text-[11.5px] text-mute">
-                      {formatBytes(f.size)} · {shortDate(f.createdAt)}{left && ` · ${left}`}
+                      {formatBytes(f.size)} · {shortDate(f.createdAt)}{left && ` · ${left}`} · {f.isPublic ? 'Public' : 'Private'}
                     </div>
                   </div>
                   <FileActions file={f} publicUrl={publicUrl} onDeleted={onDeleted} />

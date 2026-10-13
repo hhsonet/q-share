@@ -1,8 +1,9 @@
 import { useCallback, useRef, useState } from 'react'
 import { AlertCircle, ArrowUp, CheckCircle2, Loader2, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { ApiError, uploadFile, type AppConfig, type FileDto } from '@/api/files'
+import { ApiError, uploadFile, type AppConfig, type FileDto, type User } from '@/api/files'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { cn, formatBytes, getExtension } from '@/lib/utils'
 
@@ -18,7 +19,9 @@ interface QueueItem {
 
 interface Props {
   config: AppConfig | null
+  user: User | null
   onUploaded: (files: FileDto[]) => void
+  onSignIn: () => void
 }
 
 let counter = 0
@@ -29,7 +32,8 @@ function expiryLabel(hours: number): string {
   return `${Math.round(hours / 24)}-day expiry`
 }
 
-export function UploadCard({ config, onUploaded }: Props) {
+export function UploadCard({ config, user, onUploaded, onSignIn }: Props) {
+  const [makePublic, setMakePublic] = useState(false)
   const [queue, setQueue] = useState<QueueItem[]>([])
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -87,7 +91,7 @@ export function UploadCard({ config, onUploaded }: Props) {
       controllers.current.set(item.key, ctrl)
       patch(item.key, { status: 'uploading', progress: 0, error: undefined })
       try {
-        const dto = await uploadFile(item.file, (progress) => patch(item.key, { progress }), ctrl.signal)
+        const dto = await uploadFile(item.file, (progress) => patch(item.key, { progress }), ctrl.signal, user ? makePublic : true)
         done.push(dto)
         patch(item.key, { status: 'done', progress: 100 })
       } catch (e) {
@@ -159,7 +163,7 @@ export function UploadCard({ config, onUploaded }: Props) {
         <div className="flex flex-wrap justify-center gap-1.5 font-mono text-[11.5px] text-mute-2">
           <span className="rounded-full bg-fill-2 px-2.5 py-[5px]">{config ? `${formatBytes(config.maxFileSize)} max` : '…'}</span>
           <span className="rounded-full bg-fill-2 px-2.5 py-[5px]">{config ? expiryLabel(config.expiryHours) : '…'}</span>
-          <span className="rounded-full bg-fill-2 px-2.5 py-[5px]">Private link</span>
+          <span className="rounded-full bg-fill-2 px-2.5 py-[5px]">Unique link</span>
         </div>
         <input
           ref={inputRef}
@@ -178,6 +182,27 @@ export function UploadCard({ config, onUploaded }: Props) {
           <div className="border-b border-line-soft px-5 py-4 pr-14">
             <DialogTitle>Upload {queue.length === 1 ? 'file' : `${queue.length} files`}</DialogTitle>
             <DialogDescription className="mt-1">Review the selection, then upload.</DialogDescription>
+          </div>
+          <div className="border-b border-line-soft px-5 py-3.5">
+            {user ? (
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <label htmlFor="make-public" className="text-sm font-medium">Make public</label>
+                  <p className="text-xs text-mute">
+                    {makePublic ? 'Listed in Public files. Anyone can find and download it.' : 'Private. Only people with the link can download it.'}
+                  </p>
+                </div>
+                <Switch id="make-public" checked={makePublic} onCheckedChange={setMakePublic} disabled={busy} />
+              </div>
+            ) : (
+              <p className="text-xs text-mute">
+                Anonymous uploads are public and listed in Public files.{' '}
+                <button type="button" onClick={onSignIn} disabled={busy} className="font-medium text-blue-link underline underline-offset-2">
+                  Sign in
+                </button>{' '}
+                to keep files private.
+              </p>
+            )}
           </div>
           <ul aria-label="Files selected for upload" className="overflow-y-auto">
             {queue.map((item) => (

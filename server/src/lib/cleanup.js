@@ -17,3 +17,7 @@ export async function cleanupExpired() {
   }
   return removed;
 }
+
+export async function cleanupSessions() {
+  await pool.query('DELETE FROM sessions WHERE expires_at <= UTC_TIMESTAMP()');
+}

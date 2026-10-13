@@ -98,7 +98,13 @@ export async function removeStored(storedName) {
   }
 }
 
-export function toDto(row, ownerHash) {
+/** Whether the viewer ({ ownerHash, user }) owns this row. */
+export function isOwnerOf(row, viewer) {
+  if (row.user_id != null) return !!viewer.user && Number(row.user_id) === viewer.user.id;
+  return !!viewer.ownerHash && row.owner_hash === viewer.ownerHash;
+}
+
+export function toDto(row, viewer) {
   return {
     id: row.public_id,
     name: row.original_name,
@@ -108,6 +114,7 @@ export function toDto(row, ownerHash) {
     createdAt: new Date(row.created_at).toISOString(),
     expiresAt: row.expires_at ? new Date(row.expires_at).toISOString() : null,
     downloadCount: row.download_count,
-    isOwner: !!ownerHash && row.owner_hash === ownerHash,
+    isPublic: !!row.is_public,
+    isOwner: isOwnerOf(row, viewer),
   };
 }
