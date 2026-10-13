@@ -4,6 +4,7 @@ import multer from 'multer';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { pool } from '../lib/db.js';
+import { getAllowedExtensions } from '../lib/fileTypes.js';
 import { getExpiryHours } from '../lib/settings.js';
 import { bundleDto, findBundle } from './bundles.js';
 import { HttpError } from '../lib/errors.js';
@@ -32,8 +33,12 @@ const upload = multer({
   }),
   limits: { fileSize: config.maxFileSize, files: config.maxFilesPerRequest, fields: 3 },
   fileFilter: (_req, file, cb) => {
-    const problem = checkExtension(sanitizeOriginalName(file.originalname));
-    cb(problem ? new HttpError(415, problem, 'TYPE_NOT_ALLOWED') : null, !problem);
+    getAllowedExtensions()
+      .then((allowed) => {
+        const problem = checkExtension(sanitizeOriginalName(file.originalname), allowed);
+        cb(problem ? new HttpError(415, problem, 'TYPE_NOT_ALLOWED') : null, !problem);
+      })
+      .catch((e) => cb(e));
   },
 });
 
@@ -98,13 +103,14 @@ filesRouter.post('/', (req, res, next) => {
         userId = bundle.user_id == null ? null : Number(bundle.user_id);
       }
 
+      const allowedExt = await getAllowedExtensions();
       const expiryHours = await getExpiryHours();
       const created = [];
       const placed = [];
       try {
         for (const f of files) {
           const name = sanitizeOriginalName(f.originalname);
-          const bad = checkExtension(name) || (await checkContent(f.path));
+          const bad = checkExtension(name, allowedExt) || (await checkContent(f.path));
           if (bad) throw new HttpError(415, bad, 'TYPE_NOT_ALLOWED');
           if (f.size === 0) throw new HttpError(400, 'Empty files are not allowed.', 'EMPTY');
 

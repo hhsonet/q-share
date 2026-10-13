@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { hashPassword } from '../lib/auth.js';
+import { CATEGORIES, getAllowedCategories, setAllowedCategories } from '../lib/fileTypes.js';
 import { getExpiryHours, setExpiryHours } from '../lib/settings.js';
 import { pool } from '../lib/db.js';
 import { HttpError } from '../lib/errors.js';
@@ -211,6 +212,28 @@ adminRouter.patch('/files/:id/visibility', async (req, res, next) => {
     const [result] = await pool.query('UPDATE files SET is_public = ? WHERE public_id = ?', [r.data.isPublic ? 1 : 0, req.params.id]);
     if (!result.affectedRows) throw new HttpError(404, 'File not found.', 'NOT_FOUND');
     res.json({ isPublic: r.data.isPublic });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// --- allowed file types ---
+adminRouter.get('/allowed-types', async (_req, res, next) => {
+  try {
+    res.json({ categories: CATEGORIES, enabled: await getAllowedCategories() });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Which file-type groups visitors may upload (existing files are not affected).
+adminRouter.put('/allowed-types', async (req, res, next) => {
+  try {
+    const keys = CATEGORIES.map((c) => c.key);
+    const r = z.object({ enabled: z.array(z.enum(keys)).max(keys.length) }).safeParse(req.body);
+    if (!r.success) throw new HttpError(400, 'Invalid file type selection.', 'BAD_REQUEST');
+    if (!r.data.enabled.length) throw new HttpError(400, 'Allow at least one file type.', 'BAD_REQUEST');
+    res.json({ enabled: await setAllowedCategories(r.data.enabled) });
   } catch (e) {
     next(e);
   }

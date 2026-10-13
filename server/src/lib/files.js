@@ -43,13 +43,13 @@ export function sanitizeOriginalName(raw) {
   return name || 'file';
 }
 
-export function checkExtension(name) {
+export function checkExtension(name, allowed = config.allowedExtensions) {
   const ext = getExtension(name);
   if (!ext) return 'Files without an extension are not allowed.';
   // Reject double extensions that hide a blocked one, e.g. "a.php.txt".
   const hidden = name.toLowerCase().split('.').slice(1).find((p) => BLOCKED_EXTENSIONS.has(p));
   if (hidden) return `File type ".${hidden}" is not allowed.`;
-  if (!config.allowedExtensions.has(ext)) return `File type ".${ext}" is not allowed.`;
+  if (!allowed.has(ext)) return `File type ".${ext}" is not allowed.`;
   return null;
 }
 

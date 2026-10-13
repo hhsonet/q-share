@@ -8,6 +8,7 @@ import { config } from './config.js';
 import { cleanupBundles, cleanupExpired, cleanupSessions } from './lib/cleanup.js';
 import { pool } from './lib/db.js';
 import { ensureStorage } from './lib/files.js';
+import { CATEGORIES, getAllowedCategories, getAllowedExtensions } from './lib/fileTypes.js';
 import { getExpiryHours } from './lib/settings.js';
 import { identityMiddleware } from './middleware/identity.js';
 import { ownerMiddleware } from './middleware/owner.js';
@@ -57,10 +58,12 @@ app.post('/api/files', limiter(config.rateLimit.uploadMax));
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.get('/api/config', async (_req, res, next) => {
   try {
+    const enabled = await getAllowedCategories();
     res.json({
     maxFileSize: config.maxFileSize,
     maxFiles: config.maxFilesPerRequest,
-    allowedExtensions: [...config.allowedExtensions].sort(),
+    allowedExtensions: [...(await getAllowedExtensions())].sort(),
+    allowedTypes: CATEGORIES.filter((c) => enabled.includes(c.key)).map((c) => c.label),
     expiryHours: await getExpiryHours(),
     publicUrl: config.publicUrl || null,
   });

@@ -41,6 +41,7 @@ export interface AppConfig {
   maxFileSize: number
   maxFiles: number
   allowedExtensions: string[]
+  allowedTypes: string[]
   expiryHours: number
   publicUrl: string | null
 }
@@ -231,3 +232,14 @@ export const createBundle = (name: string, isPublic: boolean) =>
 export const getBundle = (id: string) =>
   request<{ bundle: BundleDto; files: FileDto[] }>(`/api/bundles/${encodeURIComponent(id)}`)
 export const deleteBundle = (id: string) => request<void>(`/api/bundles/${encodeURIComponent(id)}`, { method: 'DELETE' })
+
+// --- allowed file types ---
+export interface FileTypeCategory {
+  key: string
+  label: string
+  extensions: string[]
+}
+export const adminGetAllowedTypes = () =>
+  request<{ categories: FileTypeCategory[]; enabled: string[] }>('/api/admin/allowed-types')
+export const adminSetAllowedTypes = (enabled: string[]) =>
+  request<{ enabled: string[] }>('/api/admin/allowed-types', { ...json({ enabled }), method: 'PUT' })

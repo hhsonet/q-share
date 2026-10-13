@@ -206,6 +206,9 @@ export function UploadCard({ config, user, onUploaded, onSignIn }: Props) {
           <span className="rounded-full bg-fill-2 px-2.5 py-[5px]">{config ? expiryLabel(config.expiryHours) : '…'}</span>
           <span className="rounded-full bg-fill-2 px-2.5 py-[5px]">Unique link</span>
         </div>
+        {config && config.allowedTypes.length > 0 && (
+          <p className="max-w-sm text-xs text-mute">Accepts: {config.allowedTypes.join(', ')}</p>
+        )}
         <input
           ref={inputRef}
           type="file"

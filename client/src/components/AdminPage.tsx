@@ -4,6 +4,7 @@ import {
   adminFiles, adminSetVisibility, adminStats, adminUsers,
   type AdminFile, type AdminStats, type AdminUser, type SortKey,
 } from '@/api/files'
+import { AllowedTypesSettings } from '@/components/AllowedTypesSettings'
 import { ExpirySettings } from '@/components/ExpirySettings'
 import { ExtTile } from '@/components/ExtTile'
 import { FileExpiryDialog } from '@/components/FileExpiryDialog'
@@ -153,6 +154,8 @@ export function AdminPage({ publicUrl, currentUserId, onSelfReset }: { publicUrl
       </div>
 
       <ExpirySettings onApplied={refresh} />
+
+      <AllowedTypesSettings />
 
       <section
         className="overflow-hidden rounded-[20px] border border-line bg-white shadow-[0_1px_2px_oklch(0.2_0.01_260/0.04)]"
