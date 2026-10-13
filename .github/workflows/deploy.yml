@@ -11,17 +11,9 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, q-share]
     steps:
-      - name: Configure SSH
-        run: |
-          install -m 700 -d ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_deploy
-          chmod 600 ~/.ssh/id_deploy
-          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-
       - name: Deploy
-        run: |
-          ssh -i ~/.ssh/id_deploy -p "${{ secrets.DEPLOY_PORT || 22 }}" \
-            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "bash ${{ secrets.DEPLOY_PATH }}/deploy/deploy.sh"
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: bash "$DEPLOY_PATH/deploy/deploy.sh"
